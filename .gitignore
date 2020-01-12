@@ -1,0 +1,7 @@
+list.txt
+*.geojson
+*.jp2
+*.tif
+*.tif.ovr
+*.json
+
