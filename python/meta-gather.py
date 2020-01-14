@@ -34,21 +34,23 @@ import os
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--bucket-name', required=True, type=str)
-    parser.add_argument('--limit', default=42, type=int)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
     parser.add_argument('--response', required=True, type=str)
     return parser
+
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
     with open(args.response, 'r') as f:
         response = json.load(f)
-    results = response.get('results')
+    results = response.get('selections')
 
-    for (i, result) in zip(range(1, args.limit+1), results):
+    idxs = range(1, len(results)+1)
+    for (i, result) in zip(idxs, results):
         path = result.get('sceneMetadata').get('path')
         jobname = '{}-{}'.format(args.name, i)
-        submission = 'aws batch submit-job --job-name {} --job-queue GDAL --job-definition GDAL:2 --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{}'.format(jobname, args.bucket_name, args.name, i, args.output_path, path)
+        submission = 'aws batch submit-job --job-name {} --job-queue GDAL --job-definition GDAL:4 --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{}'.format(
+            jobname, args.bucket_name, args.name, i, args.output_path, path)
         os.system(submission)
