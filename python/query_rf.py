@@ -180,13 +180,6 @@ if __name__ == '__main__':
     shape = shapely.geometry.shape(feature.get('geometry'))
     shape = shapely.affinity.scale(shape, 1.05, 1.05)
 
-    def overlap_predicate(result):
-        footprint = result.get('dataFootprint')
-        footprint = shapely.geometry.shape(footprint)
-        footprint_area = footprint.area
-        intersection_area = (footprint.intersection(shape)).area
-        return (intersection_area / footprint_area) > .50
-
     if args.aoi_name is None:
         args.aoi_name = feature.get('properties').get('Prod_ID')
 
@@ -204,13 +197,11 @@ if __name__ == '__main__':
     rf_params = RFClient.rf_params_from_geo_filter(
         geo_filter, rf_shape.get('id'))
     sentinel_scenes = rf_client.list_scenes(rf_params)
-    sentinel_results = sentinel_scenes.get('results')
-    sentinel_results = list(filter(overlap_predicate, sentinel_results))
-    sentinel_scenes['results'] = sentinel_results
-    sentinel_scenes['box'] = shape.bounds
+    sentinel_scenes['aoi'] = shapely.geometry.mapping(shape)
 
     if args.response is None:
         args.response = './{}.json'.format(args.aoi_name)
     with open(args.response, 'w') as f:
-        json.dump(sentinel_scenes, f)
+        json.dump(sentinel_scenes, f, sort_keys=True,
+                  indent=4, separators=(',', ': '))
     print(args.response)
