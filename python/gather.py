@@ -97,8 +97,12 @@ if __name__ == '__main__':
         if args.delete:
             codes.append(os.system('rm -f /tmp/*.jp2 /tmp/CLD_20m.tif'))
 
-    # Apply mask to create second scratch file
     MASK_INDEX = 14-1
+    RED_INDEX = 4-1
+    GREEN_INDEX = 3-1
+    BLUE_INDEX = 2-1
+
+    # Create second scratch file with mask applied
     if has_mask:
         with rio.open('/tmp/scratch0.tif') as ds:
             profile = copy.copy(ds.profile)
@@ -113,9 +117,14 @@ if __name__ == '__main__':
             data = ds.read()
         profile.update(count=14)
         xy = data[0].shape
-        mask = np.ones(xy) * args.index
-        mask = mask[np.newaxis].astype(data.dtype)
-        data = np.concatenate([data, mask], axis=0)
+        mask = (np.ones(xy) * args.index).astype(data.dtype)
+        mask = mask[np.newaxis]
+        data = np.concatenate([data, mask], axis=0).astype(data.dtype)
+    not_cloud_or_anomaly = (
+        data[RED_INDEX] + data[GREEN_INDEX] + data[BLUE_INDEX]) < 6000
+    correct_dtype = data.dtype
+    for i in range(0, MASK_INDEX+1):
+        data[i] = (data[i] * not_cloud_or_anomaly).astype(data.dtype)
     if args.delete:
         codes.append(os.system('rm -f /tmp/scratch0.tif'))
     with rio.open('/tmp/scratch1.tif', 'w', **profile) as ds:
