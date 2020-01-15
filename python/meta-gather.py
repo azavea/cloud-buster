@@ -45,12 +45,15 @@ if __name__ == '__main__':
 
     with open(args.response, 'r') as f:
         response = json.load(f)
+    [xmin, ymin, xmax, ymax] = response.get('bounds')
     results = response.get('selections')
 
     idxs = range(1, len(results)+1)
     for (i, result) in zip(idxs, results):
         path = result.get('sceneMetadata').get('path')
         jobname = '{}-{}'.format(args.name, i)
-        submission = 'aws batch submit-job --job-name {} --job-queue GDAL --job-definition GDAL:4 --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{}'.format(
-            jobname, args.bucket_name, args.name, i, args.output_path, path)
+        bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
+        submission = 'aws batch submit-job --job-name {} --job-queue GDAL --job-definition GDAL:4 --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{},{}'.format(
+            jobname, args.bucket_name, args.name, i, args.output_path, path, bounds)
+        # print(submission)
         os.system(submission)

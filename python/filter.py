@@ -92,7 +92,10 @@ if __name__ == '__main__':
     print(len(selections))
     for selection in selections:
         del selection['dataShape']
-    selections = {'selections': selections}
+    selections = {
+        'bounds': shape.bounds,
+        'selections': selections
+    }
 
     with open(args.output, 'w') as f:
         json.dump(selections, f, sort_keys=True,
