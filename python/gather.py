@@ -41,6 +41,7 @@ import scipy.ndimage
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--backstop', required=True, type=ast.literal_eval)
     parser.add_argument('--bounds', required=False, nargs='+', type=float)
     parser.add_argument('--delete', required=False,
                         default=True, type=ast.literal_eval)
@@ -58,16 +59,22 @@ if __name__ == '__main__':
 
     # Download data
     codes.append(os.system(
-        'aws s3 sync s3://sentinel-s2-l1c/{}/ /tmp --exclude="*" --include="B*.jp2" --request-payer requester'.format(args.sentinel_path)))
-    codes.append(os.system(
-        'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ /tmp --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(args.sentinel_path)))
+        'aws s3 sync s3://sentinel-s2-l1c/{}/ /tmp --exclude="*" --include="B*.jp2" --request-payer requester'.format(
+            args.sentinel_path)))
+    if not args.backstop:
+        os.system(
+            'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ /tmp --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
+                args.sentinel_path))
 
     # Determine resolution and filename
     info = json.loads(os.popen('gdalinfo -json /tmp/B04.jp2').read())
     geoTransform = info.get('geoTransform')
     xres = geoTransform[1]
     yres = geoTransform[5]
-    filename = '/tmp/{}-{:02d}.tif'.format(args.name, args.index)
+    if not args.backstop:
+        filename = '/tmp/{}-{:02d}.tif'.format(args.name, args.index)
+    else:
+        filename = '/tmp/backstop-{}-{:02d}.tif'.format(args.name, args.index)
 
     # Prepare the cloud mask
     if os.path.isfile('/tmp/CLD_20m.jp2'):
@@ -82,7 +89,7 @@ if __name__ == '__main__':
         with rio.open('/tmp/CLD_20m.tif', 'w', **profile) as ds:
             ds.write(mask)
         if args.delete:
-            codes.append(os.system('rm -f /tmp/CLD_20m.jp2'))
+            os.system('rm -f /tmp/CLD_20m.jp2')
     else:
         print('NO MASK FOUND')
         has_mask = False
@@ -91,11 +98,11 @@ if __name__ == '__main__':
     if has_mask:
         codes.append(os.system('gdal_merge.py -separate -o /tmp/scratch0.tif -ps {} {} -co BIGTIFF=YES /tmp/B01.jp2 /tmp/B02.jp2 /tmp/B03.jp2 /tmp/B04.jp2 /tmp/B05.jp2 /tmp/B06.jp2 /tmp/B07.jp2 /tmp/B08.jp2 /tmp/B8A.jp2 /tmp/B09.jp2 /tmp/B10.jp2 /tmp/B11.jp2 /tmp/B12.jp2 /tmp/CLD_20m.tif'.format(xres, yres)))
         if args.delete:
-            codes.append(os.system('rm -f /tmp/*.jp2 /tmp/CLD_20m.tif'))
+            os.system('rm -f /tmp/*.jp2 /tmp/CLD_20m.tif')
     else:
         codes.append(os.system('gdal_merge.py -separate -o /tmp/scratch0.tif -ps {} {} -co BIGTIFF=YES /tmp/B01.jp2 /tmp/B02.jp2 /tmp/B03.jp2 /tmp/B04.jp2 /tmp/B05.jp2 /tmp/B06.jp2 /tmp/B07.jp2 /tmp/B08.jp2 /tmp/B8A.jp2 /tmp/B09.jp2 /tmp/B10.jp2 /tmp/B11.jp2 /tmp/B12.jp2'.format(xres, yres)))
         if args.delete:
-            codes.append(os.system('rm -f /tmp/*.jp2 /tmp/CLD_20m.tif'))
+            os.system('rm -f /tmp/*.jp2 /tmp/CLD_20m.tif')
 
     MASK_INDEX = 14-1
     RED_INDEX = 4-1
@@ -103,30 +110,30 @@ if __name__ == '__main__':
     BLUE_INDEX = 2-1
 
     # Create second scratch file with mask applied
+    with rio.open('/tmp/scratch0.tif') as ds:
+        profile = copy.copy(ds.profile)
+        data = ds.read()
     if has_mask:
-        with rio.open('/tmp/scratch0.tif') as ds:
-            profile = copy.copy(ds.profile)
-            data = ds.read()
         data[MASK_INDEX] = (data[MASK_INDEX] == 0)
         for i in range(0, MASK_INDEX):
             data[i] = data[i] * data[MASK_INDEX]
-        data[MASK_INDEX] = data[MASK_INDEX] * args.index
+        data[MASK_INDEX] = (data[MASK_INDEX] * args.index).astype(data.dtype)
     else:
-        with rio.open('/tmp/scratch0.tif') as ds:
-            profile = copy.copy(ds.profile)
-            data = ds.read()
         profile.update(count=14)
         xy = data[0].shape
         mask = (np.ones(xy) * args.index).astype(data.dtype)
         mask = mask[np.newaxis]
         data = np.concatenate([data, mask], axis=0).astype(data.dtype)
-    not_cloud_or_anomaly = (
-        data[RED_INDEX] + data[GREEN_INDEX] + data[BLUE_INDEX]) < 6000
-    correct_dtype = data.dtype
+    if not args.backstop:
+        not_cloud_or_anomaly_or_nodata = (
+            data[RED_INDEX] + data[GREEN_INDEX] + data[BLUE_INDEX]) < 6000
+    else:
+        not_cloud_or_anomaly_or_nodata = np.ones(data[0].shape)
+    not_cloud_or_anomaly_or_nodata = not_cloud_or_anomaly_or_nodata * (data[0] != 0)
     for i in range(0, MASK_INDEX+1):
-        data[i] = (data[i] * not_cloud_or_anomaly).astype(data.dtype)
+        data[i] = (data[i] * not_cloud_or_anomaly_or_nodata).astype(data.dtype)
     if args.delete:
-        codes.append(os.system('rm -f /tmp/scratch0.tif'))
+        os.system('rm -f /tmp/scratch0.tif')
     with rio.open('/tmp/scratch1.tif', 'w', **profile) as ds:
         ds.write(data)
 
@@ -139,7 +146,7 @@ if __name__ == '__main__':
     codes.append(os.system(
         'gdalwarp -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 /tmp/scratch1.tif -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(te, filename)))
     if args.delete:
-        codes.append(os.system('rm -f /tmp/scratch1.tif'))
+        os.system('rm -f /tmp/scratch1.tif')
 
     # Upload final file
     codes.append(

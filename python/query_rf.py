@@ -166,8 +166,9 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--aoi-name', required=False, type=str)
     parser.add_argument('--geojson', required=True, type=str)
     parser.add_argument('--limit', required=False, default=1024, type=int)
-    parser.add_argument('--response', required=False, type=str)
+    parser.add_argument('--name-property', type=str, default='Prod_ID')
     parser.add_argument('--refresh-token', required=True, type=str)
+    parser.add_argument('--response', required=False, type=str)
     return parser
 
 
@@ -181,7 +182,7 @@ if __name__ == '__main__':
     shape = shapely.affinity.scale(shape, 1.05, 1.05)
 
     if args.aoi_name is None:
-        args.aoi_name = feature.get('properties').get('Prod_ID')
+        args.aoi_name = feature.get('properties').get(args.name_property)
 
     rf_client = RFClient(args.refresh_token,
                          'https://app.rasterfoundry.com/api')
