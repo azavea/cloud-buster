@@ -59,9 +59,9 @@ if __name__ == '__main__':
     os.system('aws s3 sync {} /tmp/'.format(args.input_path))
 
     # Build VRTs
+    os.system('gdalbuildvrt {} $(ls -r /tmp/backstop*.tif)'.format(cloudy_vrt))
     os.system(
-        'gdalbuildvrt {} $(ls /tmp/backstop*.tif) $(ls /tmp/*.tif | grep -v backstop)'.format(cloudless_vrt))
-    os.system('gdalbuildvrt {} $(ls /tmp/backstop*.tif)'.format(cloudy_vrt))
+        'gdalbuildvrt {} $(ls -r /tmp/backstop*.tif) $(ls -r /tmp/*.tif | grep -v backstop)'.format(cloudless_vrt))
 
     # Produce final images
     os.system('gdalwarp {} -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudy_vrt, cloudy_tif))
