@@ -27,12 +27,15 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import json
 import os
 
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--bounds-clip', required=False,
+                        default=True, type=ast.literal_eval)
     parser.add_argument('--bucket-name', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
@@ -55,8 +58,13 @@ if __name__ == '__main__':
         path = result.get('sceneMetadata').get('path')
         backstop = '--backstop,{}'.format(result.get('backstop', False))
         jobname = '{}-{}'.format(args.name, i)
-        bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
+        if args.bounds_clip:
+            bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
+        else:
+            bounds = ''
         submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{},{},{}'.format(
-            jobname, args.jobqueue, args.jobdef, args.bucket_name, args.name, i, args.output_path, path, bounds, backstop)
+            jobname, args.jobqueue, args.jobdef, args.bucket_name, args.name, i, args.output_path, path, backstop, bounds)
+        if submission[-1] == ',':
+            submission = submission[0:-1]
         # print(submission)
         os.system(submission)

@@ -189,8 +189,8 @@ if __name__ == '__main__':
     rf_shape = rf_client.create_shape(
         shapely.geometry.mapping(shape), str(uuid4()))
     geo_filter = {
-        "minAcquisitionDate": "1307-11-13",
-        "maxAcquisitionDate": "2161-01-01",
+        "minAcquisitionDate": "1307-10-13",
+        "maxAcquisitionDate": "2038-01-19",
         "maxCloudCover": 20,
         "overlapPercentage": 50.0,
         "limit": args.limit

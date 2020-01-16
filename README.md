@@ -24,4 +24,5 @@ python3 python/meta-gather.py --bucket-name my-bucket --name good-name --output-
 ## Merge ##
 
 ```
+python3 python/meta-merge.py --bucket-name my-bucket --input-path s3://my-bucket/input-path/ --output-path s3://my-bucket/output-path/ --name good-name --jobqueue my-queue --jobdef my-jobdef:33
 ```
