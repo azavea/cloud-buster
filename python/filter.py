@@ -60,6 +60,7 @@ if __name__ == '__main__':
     shapes = []
     for i in range(args.coverage_count):
         shapes.append(copy.copy(shape))
+    backstop = copy.copy(shape)
 
     selections = []
 
@@ -67,6 +68,11 @@ if __name__ == '__main__':
         areas = list(map(lambda s: s.area, shapes))
         print(areas)
         return sum(areas) > 0
+
+    def not_backstopped():
+        area = backstop.area
+        print(area)
+        return area
 
     while not_covered():
         i_best = -1
@@ -86,6 +92,23 @@ if __name__ == '__main__':
                     area_best = area
         shapes[j_best] = shapes[j_best].difference(
             results[i_best].get('dataShape'))
+        selections.append(results[i_best])
+        results = results[0:i_best] + results[i_best+1:]
+
+    while not_backstopped():
+        i_best = -1
+        area_best = 0.0
+        for i in range(len(results)):
+            raw_area = results[i].get('dataShape').intersection(backstop).area
+            non_cloudy_pct = 1.0 - \
+                float(results[i].get('sceneMetadata').get(
+                    'cloudyPixelPercentage'))/100.0
+            area = raw_area * non_cloudy_pct
+            if area > area_best:
+                i_best = i
+                area_best = area
+        backstop = backstop.difference(results[i_best].get('dataShape'))
+        results[i_best]['backstop'] = True
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
 

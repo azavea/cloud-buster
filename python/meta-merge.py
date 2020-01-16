@@ -34,9 +34,9 @@ import os
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--bucket-name', required=True, type=str)
+    parser.add_argument('--input-path', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
-    parser.add_argument('--response', required=True, type=str)
     parser.add_argument('--jobqueue', required=True, type=str)
     parser.add_argument('--jobdef', required=True, type=str)
     return parser
@@ -45,18 +45,8 @@ def cli_parser() -> argparse.ArgumentParser:
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    with open(args.response, 'r') as f:
-        response = json.load(f)
-    [xmin, ymin, xmax, ymax] = response.get('bounds')
-    results = response.get('selections')
-
-    idxs = range(1, len(results)+1)
-    for (i, result) in zip(idxs, results):
-        path = result.get('sceneMetadata').get('path')
-        backstop = '--backstop,{}'.format(result.get('backstop', False))
-        jobname = '{}-{}'.format(args.name, i)
-        bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
-        submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{},{},{}'.format(
-            jobname, args.jobqueue, args.jobdef, args.bucket_name, args.name, i, args.output_path, path, bounds, backstop)
-        # print(submission)
-        os.system(submission)
+    jobname = '{}-MERGE'.format(args.name)
+    submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/merge.py,--input-path,{},--name,{},--output-path,{}'.format(
+        jobname, args.jobqueue, args.jobdef, args.bucket_name, args.input_path, args.name, args.output_path)
+    # print(submission)
+    os.system(submission)

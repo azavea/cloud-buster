@@ -27,36 +27,46 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
+import copy
 import json
 import os
+import sys
+
+import numpy as np
+
+import rasterio as rio
+import scipy.ndimage
 
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--bucket-name', required=True, type=str)
+    parser.add_argument('--input-path', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
-    parser.add_argument('--response', required=True, type=str)
-    parser.add_argument('--jobqueue', required=True, type=str)
-    parser.add_argument('--jobdef', required=True, type=str)
     return parser
 
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    with open(args.response, 'r') as f:
-        response = json.load(f)
-    [xmin, ymin, xmax, ymax] = response.get('bounds')
-    results = response.get('selections')
+    cloudless_vrt = '/tmp/cloudless.vrt'
+    cloudy_vrt = '/tmp/cloudy.vrt'
+    cloudless_tif = '/tmp/{}-cloudless.tif'.format(args.name)
+    cloudy_tif = '/tmp/{}-cloudy.tif'.format(args.name)
 
-    idxs = range(1, len(results)+1)
-    for (i, result) in zip(idxs, results):
-        path = result.get('sceneMetadata').get('path')
-        backstop = '--backstop,{}'.format(result.get('backstop', False))
-        jobname = '{}-{}'.format(args.name, i)
-        bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
-        submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{},{},{}'.format(
-            jobname, args.jobqueue, args.jobdef, args.bucket_name, args.name, i, args.output_path, path, bounds, backstop)
-        # print(submission)
-        os.system(submission)
+    # Download
+    os.system('aws s3 sync {} /tmp/'.format(args.input_path))
+
+    # Build VRTs
+    os.system('gdalbuildvrt {} $(ls -r /tmp/backstop*.tif)'.format(cloudy_vrt))
+    os.system(
+        'gdalbuildvrt {} $(ls -r /tmp/backstop*.tif) $(ls -r /tmp/*.tif | grep -v backstop)'.format(cloudless_vrt))
+
+    # Produce final images
+    os.system('gdalwarp {} -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudy_vrt, cloudy_tif))
+    os.system('gdalwarp {} -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudless_vrt, cloudless_tif))
+
+    # Upload
+    os.system('aws s3 cp {} {}'.format(cloudy_tif, args.output_path))
+    os.system('aws s3 cp {} {}'.format(cloudless_tif, args.output_path))
