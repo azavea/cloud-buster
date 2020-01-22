@@ -1,6 +1,7 @@
 # cloud-buster
 
-![Cloud Buster](https://user-images.githubusercontent.com/11281373/72390088-cc582a80-3721-11ea-9353-1d0671b684da.jpg)
+![Cloud Buster](https://user-images.githubusercontent.com/11281373/72922457-f7a3d080-3d44-11ea-9032-fc80166a5389.jpg)
+
 
 
 ## Query ##
