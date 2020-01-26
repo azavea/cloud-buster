@@ -27,6 +27,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import copy
 import json
 import os
@@ -38,6 +39,7 @@ import shapely.ops  # type: ignore
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--backstop', required=False, default=True, type=ast.literal_eval)
     parser.add_argument('--coverage-count',
                         required=False, default=3, type=int)
     parser.add_argument('--input', required=True, type=str)
@@ -95,7 +97,7 @@ if __name__ == '__main__':
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
 
-    while not_backstopped():
+    while not_backstopped() and args.backstop:
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
