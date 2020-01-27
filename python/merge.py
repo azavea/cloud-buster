@@ -50,22 +50,19 @@ def cli_parser() -> argparse.ArgumentParser:
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    cloudless_vrt = '/tmp/cloudless.vrt'
-    cloudy_vrt = '/tmp/cloudy.vrt'
     cloudless_tif = '/tmp/{}-cloudless.tif'.format(args.name)
     cloudy_tif = '/tmp/{}-cloudy.tif'.format(args.name)
 
     # Download
     os.system('aws s3 sync {} /tmp/'.format(args.input_path))
 
-    # Build VRTs
-    os.system('gdalbuildvrt {} $(ls -r /tmp/backstop*.tif)'.format(cloudy_vrt))
-    os.system(
-        'gdalbuildvrt {} $(ls -r /tmp/backstop*.tif) $(ls -r /tmp/*.tif | grep -v backstop)'.format(cloudless_vrt))
-
     # Produce final images
-    os.system('gdalwarp {} -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudy_vrt, cloudy_tif))
-    os.system('gdalwarp {} -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudless_vrt, cloudless_tif))
+    os.system('gdalwarp $(ls /tmp/*.tif | grep backstop | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES /tmp/cloudy.tif')
+    os.system('gdalwarp /tmp/cloudy.tif -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudy_tif))
+    os.system('rm /tmp/cloudy.tif')
+    os.system('gdalwarp {} $(ls /tmp/*.tif | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES /tmp/cloudless.tif'.format(cloudy_tif))
+    os.system('gdalwarp /tmp/cloudless.tif -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudless_tif))
+    os.system('rm /tmp/cloudless.tif')
 
     # Upload
     os.system('aws s3 cp {} {}'.format(cloudy_tif, args.output_path))
