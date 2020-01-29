@@ -129,13 +129,16 @@ if __name__ == '__main__':
                 tile_path=tile_path,
                 band=band_to_band.get(args.band))
 
-            with rio.open(band_path, 'r') as ds:
-                data = ds.read(
-                    window=read_window,
-                    out_shape=(1, 120, 120),
-                    resampling=rasterio.enums.Resampling.bilinear)
-                assert(data.shape == (1, 120, 120))
-                out_ds.write(data, (1,), window=window_10m)
+            try:
+                with rio.open(band_path, 'r') as ds:
+                    data = ds.read(
+                        window=read_window,
+                        out_shape=(1, 120, 120),
+                        resampling=rasterio.enums.Resampling.bilinear)
+                    assert(data.shape == (1, 120, 120))
+                    out_ds.write(data, (1,), window=window_10m)
+            except:
+                pass
 
             i = i + 1
             pct = 100 * float(i) / len(cloud_list)
