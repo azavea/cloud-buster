@@ -42,7 +42,7 @@ import rasterio.windows
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cloud-list', required=True, type=str)
+    parser.add_argument('--mosaic-list', required=True, type=str)
     parser.add_argument('--entire-list', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
     parser.add_argument('--band', required=True, type=int)
@@ -57,9 +57,9 @@ if __name__ == '__main__':
     if 'CURL_CA_BUNDLE' not in os.environ:
         os.environ['CURL_CA_BUNDLE'] = '/etc/ssl/certs/ca-certificates.crt'
 
-    # List of cloudy patches
-    with open(args.cloud_list, 'r') as f:
-        cloud_list = [line.strip() for line in f.readlines()]
+    # List of selected patches
+    with open(args.mosaic_list, 'r') as f:
+        mosaic_list = [line.strip() for line in f.readlines()]
 
     # List of all patches w/ paths to the source tile
     with open(args.entire_list, 'r') as f:
@@ -81,14 +81,14 @@ if __name__ == '__main__':
         entire_list[k] = v
     del _entire_list
 
-    root_patches = math.ceil(math.sqrt(len(cloud_list)))
+    root_patches = math.ceil(math.sqrt(len(mosaic_list)))
     width = root_patches * 120
     height = root_patches * 120
 
     profile = {
         'dtype': np.uint16,
         'count': 1,
-        'compress': 'deflate',
+        'compress': None,
         'driver': 'GTiff',
         'width': width,
         'height': height,
@@ -114,15 +114,16 @@ if __name__ == '__main__':
 
     with rio.open(args.output, 'w', **profile) as out_ds:
         i = 0
-        for cloud in cloud_list:
-            xwindow = i % root_patches
-            ywindow = i // root_patches
+        for cloud in sorted(mosaic_list):
+            read_xwindow, read_ywindow = list(map(int, cloud.split('_')[-2:]))
+            write_xwindow = i % root_patches
+            write_ywindow = i // root_patches
 
             res = band_to_resolution.get(args.band)
             read_window = rasterio.windows.Window(
-                xwindow * res, ywindow * res, res, res)
+                read_xwindow * res, read_ywindow * res, res, res)
             window_10m = rasterio.windows.Window(
-                xwindow * 120, ywindow * 120, 120, 120)
+                write_xwindow * 120, write_ywindow * 120, 120, 120)
 
             tile_path = entire_list[cloud]
             band_path = '/vsis3/sentinel-s2-l1c/{tile_path}/{band}.jp2'.format(
@@ -141,5 +142,5 @@ if __name__ == '__main__':
                 pass
 
             i = i + 1
-            pct = 100 * float(i) / len(cloud_list)
+            pct = 100 * float(i) / len(mosaic_list)
             print('Band {band}: {pct}%'.format(band=args.band, pct=pct))
