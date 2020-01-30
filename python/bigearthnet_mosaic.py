@@ -46,6 +46,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--entire-list', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
     parser.add_argument('--band', required=True, type=int)
+    parser.add_argument('--upload', required=False, type=str)
     return parser
 
 
@@ -56,6 +57,15 @@ if __name__ == '__main__':
         os.environ['AWS_REQUEST_PAYER'] = 'requester'
     if 'CURL_CA_BUNDLE' not in os.environ:
         os.environ['CURL_CA_BUNDLE'] = '/etc/ssl/certs/ca-certificates.crt'
+
+    if args.mosaic_list[0:5] == 's3://':
+        command = 'aws s3 cp {mosaic} /tmp/'.format(mosaic=args.mosaic_list)
+        os.system(command)
+        args.mosaic_list = '/tmp/' + args.mosaic_list.split('/')[-1]
+    if args.entire_list[0:5] == 's3://':
+        command = 'aws s3 cp {entire} /tmp/'.format(entire=args.entire_list)
+        os.system(command)
+        args.entire_list = '/tmp/' + args.entire_list.split('/')[-1]
 
     # List of selected patches
     with open(args.mosaic_list, 'r') as f:
@@ -144,3 +154,8 @@ if __name__ == '__main__':
             i = i + 1
             pct = 100 * float(i) / len(mosaic_list)
             print('Band {band}: {pct}%'.format(band=args.band, pct=pct))
+
+    if args.upload:
+        command = 'aws s3 cp {output} {upload}'.format(
+            output=args.output, upload=args.upload)
+        os.system(command)
