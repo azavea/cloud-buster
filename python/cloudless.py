@@ -28,16 +28,26 @@
 
 import argparse
 import copy
+import subprocess
+import sys
 
 import numpy as np
 import rasterio as rio
+import rasterio.enums
+
+try:
+    from s2cloudless import S2PixelCloudDetector
+except:
+    # https://stackoverflow.com/a/50255019
+    subprocess.check_call(
+        [sys.executable, '-m', 'pip', 'install', 's2cloudless'])
+    from s2cloudless import S2PixelCloudDetector
 
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output-mag', required=False, type=str)
-    parser.add_argument('--output-dir', required=False, type=str)
+    parser.add_argument('--output', required=True, type=str)
     return parser
 
 
@@ -45,30 +55,23 @@ if __name__ == '__main__':
     args = cli_parser().parse_args()
 
     with rio.open(args.input, 'r') as ds:
-        data = ds.read()
+        width = ds.width
+        height = ds.height
+        data = ds.read(out_shape=(ds.count, width // 16, height // 16),
+                       resampling=rasterio.enums.Resampling.nearest)
         profile = copy.copy(ds.profile)
-    profile.update(count=1, dtype=np.float32)
+    profile.update(count=1, dtype=np.uint8)
+    data = data[0:13, :, :]
+    data = np.transpose(data, axes=(1, 2, 0))
+    (x, y, c) = data.shape
+    data = data.reshape(1, x, y, c) / 1e5
 
-    (c, x, y) = data.shape
-    shape = (1, x, y)
+    cloud_detector = S2PixelCloudDetector(
+        threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
+    cloud_probs = cloud_detector.get_cloud_probability_maps(data)
+    cloud_probs = cloud_probs.astype(np.float32)
+    quantile = np.quantile(cloud_probs, 0.20)
+    cloud_mask = (cloud_probs > quantile).astype(np.uint8)
 
-    # Compute magnitudes
-    magnitudes = np.zeros(shape)
-    for i in range(0, len(data)):
-        magnitudes = magnitudes + np.square(data[i])
-    magnitudes = np.sqrt(magnitudes).astype(np.float32)
-
-    if args.output_mag:
-        with rio.open(args.output_mag, 'w', **profile) as ds:
-            ds.write(magnitudes)
-
-    # Compute directions
-    if args.output_dir:
-        cloud_vector = np.array([4201, 3694, 3684, 4113, 4552, 5808, 6409, 6031, 6815, 2867, 81, 4043, 2429])
-        cloud_vector = cloud_vector / np.sqrt(np.sum(np.square(cloud_vector)))
-        data = np.transpose(data, axes=(1,2,0))
-        directions = np.dot(data, cloud_vector)
-        directions = directions.reshape(1, x, y).astype(np.float32)
-
-        with rio.open(args.output_dir, 'w', **profile) as ds:
-            ds.write(directions)
+    with rio.open(args.output, 'w', **profile) as ds:
+        ds.write(cloud_mask)
