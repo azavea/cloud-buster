@@ -34,7 +34,6 @@ import sys
 import numpy as np
 import rasterio as rio
 import rasterio.enums
-import scipy.ndimage
 
 try:
     from s2cloudless import S2PixelCloudDetector
@@ -73,9 +72,6 @@ if __name__ == '__main__':
     cloud_probs = cloud_probs.astype(np.float32)
     quantile = np.quantile(cloud_probs, 0.20)
     cloud_mask = (cloud_probs > quantile).astype(np.uint8)
-
-    element = np.ones((7,7))
-    cloud_mask[0] = scipy.ndimage.binary_erosion(cloud_mask[0], structure=element)
 
     with rio.open(args.output, 'w', **profile) as ds:
         ds.write(cloud_mask)
