@@ -27,18 +27,21 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import json
 import os
 
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--bucket-name', required=True, type=str)
+    parser.add_argument('--dryrun', required=False,
+                        default=False, type=ast.literal_eval)
     parser.add_argument('--input-path', required=True, type=str)
+    parser.add_argument('--jobdef', required=True, type=str)
+    parser.add_argument('--jobqueue', required=True, type=str)
+    parser.add_argument('--merge', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
-    parser.add_argument('--jobqueue', required=True, type=str)
-    parser.add_argument('--jobdef', required=True, type=str)
     return parser
 
 
@@ -46,7 +49,16 @@ if __name__ == '__main__':
     args = cli_parser().parse_args()
 
     jobname = '{}-MERGE'.format(args.name)
-    submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/merge.py,--input-path,{},--name,{},--output-path,{}'.format(
-        jobname, args.jobqueue, args.jobdef, args.bucket_name, args.input_path, args.name, args.output_path)
-    # print(submission)
-    os.system(submission)
+    submission = ''.join([
+        'aws batch submit-job ',
+        '--job-name {} '.format(jobname),
+        '--job-queue {} '.format(args.jobqueue),
+        '--job-definition {} '.format(args.jobdef),
+        '--container-overrides ',
+        'command=./download_run.sh,{},'.format(merge),
+        '--input-path,{},'.format(args.input_path),
+        '--name,{},'.format(args.name),
+        '--output-path,{}'.format(args.output_path)
+    ])
+    print(submission)
+    # os.system(submission)
