@@ -34,14 +34,18 @@ import os
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--architecture', required=True, type=str)
     parser.add_argument('--bounds-clip', required=False,
                         default=True, type=ast.literal_eval)
-    parser.add_argument('--bucket-name', required=True, type=str)
+    parser.add_argument('--dryrun', required=False,
+                        default=False, type=ast.literal_eval)
+    parser.add_argument('--gather', required=True, type=str)
+    parser.add_argument('--jobdef', required=True, type=str)
+    parser.add_argument('--jobqueue', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
     parser.add_argument('--response', required=True, type=str)
-    parser.add_argument('--jobqueue', required=True, type=str)
-    parser.add_argument('--jobdef', required=True, type=str)
+    parser.add_argument('--weights', required=True, type=str)
     return parser
 
 
@@ -55,16 +59,25 @@ if __name__ == '__main__':
 
     idxs = range(1, len(results)+1)
     for (i, result) in zip(idxs, results):
-        path = result.get('sceneMetadata').get('path')
-        backstop = '--backstop,{}'.format(result.get('backstop', False))
-        jobname = '{}-{}'.format(args.name, i)
-        if args.bounds_clip:
-            bounds = '--bounds,{},{},{},{}'.format(xmin, ymin, xmax, ymax)
+        submission = ''.join([
+            'aws batch submit-job ',
+            '--job-name {} '.format('{}-{}'.format(args.name, i)),
+            '--job-queue {} '.format(args.jobqueue),
+            '--job-definition {} '.format(args.jobdef),
+            '--container-overrides vcpus=1,memory=8000,',
+            'command=./download_run.sh,{},'.format(args.gather),
+            '--name,{},'.format(args.name),
+            '--index,{},'.format(i),
+            '--output-path,{},'.format(args.output_path),
+            '--sentinel-path,{},'.format(
+                result.get('sceneMetadata').get('path')),
+            '--architecture,{},'.format(args.architecture),
+            '--weights,{},'.format(args.weights),
+            '--backstop,{}'.format(result.get('backstop', False)),
+            ',--bounds,{},{},{},{}'.format(xmin, ymin,
+                                           xmax, ymax) if args.bounds_clip else '',
+        ])
+        if args.dryrun:
+            print(submission)
         else:
-            bounds = ''
-        submission = 'aws batch submit-job --job-name {} --job-queue {} --job-definition {} --container-overrides command=./download_run.sh,s3://{}/CODE/gather.py,--name,{},--index,{},--output-path,{},--sentinel-path,{},{},{}'.format(
-            jobname, args.jobqueue, args.jobdef, args.bucket_name, args.name, i, args.output_path, path, backstop, bounds)
-        if submission[-1] == ',':
-            submission = submission[0:-1]
-        # print(submission)
-        os.system(submission)
+            os.system(submission)
