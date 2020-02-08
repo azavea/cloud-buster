@@ -19,11 +19,11 @@ python3 python/filter.py --input raw-response.json --output filtered-response.js
 ## Gather ##
 
 ```
-python3 python/meta-gather.py --bucket-name my-bucket --name good-name --output-path s3://my-bucket/path/ --response filtered-response.json --jobqueue my-queue --jobdef my-jobdef:33
+python3 python/meta-gather.py --architecture arch.py --weights weights.pth --gather gather.py --name good-name --output-path s3://my-bucket/path/ --response filtered-response.json --jobqueue my-queue --jobdef my-jobdef:33
 ```
 
 ## Merge ##
 
 ```
-python3 python/meta-merge.py --bucket-name my-bucket --input-path s3://my-bucket/input-path/ --output-path s3://my-bucket/output-path/ --name good-name --jobqueue my-queue --jobdef my-jobdef:33
+python3 python/meta-merge.py --merge merge.py --input-path s3://my-bucket/input-path/ --output-path s3://my-bucket/output-path/ --name good-name --jobqueue my-queue --jobdef my-jobdef:33
 ```
