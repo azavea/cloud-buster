@@ -171,7 +171,7 @@ if __name__ == '__main__':
     cloud_mask = np.zeros(out_shape, dtype=np.float32)
 
     # Get the stock cloud mask
-    if os.path.isfile('/tmp/CLD_20m.jp2'):
+    if not args.backstop and os.path.isfile('/tmp/CLD_20m.jp2'):
         with rio.open('/tmp/CLD_20m.jp2') as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
@@ -181,39 +181,42 @@ if __name__ == '__main__':
             os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
-    small_data = np.zeros((13, width//16, height//16), dtype=np.uint16)
-    rasterio.warp.reproject(
-        data[0:13], small_data,
-        src_transform=geoTransform,
-        src_crs=crs,
-        dst_transform=geoTransform * rasterio.transform.Affine.scale(16, 16),
-        dst_crs=crs,
-        resampling=rasterio.enums.Resampling.nearest)
-    small_data = np.transpose(small_data, axes=(1, 2, 0))
-    small_data = small_data.reshape(1, width//16, height//16, 13) / 1e5
-    cloud_detector = S2PixelCloudDetector(
-        threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
-    cloud_probs = cloud_detector.get_cloud_probability_maps(small_data)
-    cloud_probs = cloud_probs.astype(np.float32)
-    tmp = np.zeros((1, width, height), dtype=np.float32)
-    rasterio.warp.reproject(
-        cloud_probs, tmp,
-        src_transform=geoTransform * rasterio.transform.Affine.scale(16, 16),
-        src_crs=crs,
-        dst_transform=geoTransform,
-        dst_crs=crs,
-        resampling=rasterio.enums.Resampling.nearest)
-    cloud_mask = cloud_mask + tmp
-    if not args.delete:
-        profile.update(count=1, dtype=np.float32)
-        with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
-            ds.write(tmp)
-        profile.update(count=14, dtype=np.uint16)
-    del tmp
-    del small_data
+    if not args.backstop:
+        small_data = np.zeros((13, width//16, height//16), dtype=np.uint16)
+        rasterio.warp.reproject(
+            data[0:13], small_data,
+            src_transform=geoTransform,
+            src_crs=crs,
+            dst_transform=geoTransform *
+            rasterio.transform.Affine.scale(16, 16),
+            dst_crs=crs,
+            resampling=rasterio.enums.Resampling.nearest)
+        small_data = np.transpose(small_data, axes=(1, 2, 0))
+        small_data = small_data.reshape(1, width//16, height//16, 13) / 1e5
+        cloud_detector = S2PixelCloudDetector(
+            threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
+        cloud_probs = cloud_detector.get_cloud_probability_maps(small_data)
+        cloud_probs = cloud_probs.astype(np.float32)
+        tmp = np.zeros((1, width, height), dtype=np.float32)
+        rasterio.warp.reproject(
+            cloud_probs, tmp,
+            src_transform=geoTransform *
+            rasterio.transform.Affine.scale(16, 16),
+            src_crs=crs,
+            dst_transform=geoTransform,
+            dst_crs=crs,
+            resampling=rasterio.enums.Resampling.nearest)
+        cloud_mask = cloud_mask + tmp
+        if not args.delete:
+            profile.update(count=1, dtype=np.float32)
+            with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
+                ds.write(tmp)
+            profile.update(count=14, dtype=np.uint16)
+        del tmp
+        del small_data
 
     # Get model cloud mask
-    if args.architecture is not None and args.weights is not None:
+    if not args.backstop and args.architecture is not None and args.weights is not None:
         tmp = np.zeros((1, width, height), dtype=np.float32)
         load_architecture(args.architecture)
         device = torch.device('cpu')
