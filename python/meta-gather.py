@@ -34,7 +34,7 @@ import os
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--architecture', required=True, type=str)
+    parser.add_argument('--architecture', required=False, type=str)
     parser.add_argument('--bounds-clip', required=False,
                         default=True, type=ast.literal_eval)
     parser.add_argument('--dryrun', required=False,
@@ -45,7 +45,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
     parser.add_argument('--response', required=True, type=str)
-    parser.add_argument('--weights', required=True, type=str)
+    parser.add_argument('--weights', required=False, type=str)
     return parser
 
 
@@ -71,11 +71,11 @@ if __name__ == '__main__':
             '--output-path,{},'.format(args.output_path),
             '--sentinel-path,{},'.format(
                 result.get('sceneMetadata').get('path')),
-            '--architecture,{},'.format(args.architecture),
-            '--weights,{},'.format(args.weights),
-            '--backstop,{}'.format(result.get('backstop', False)),
-            ',--bounds,{},{},{},{}'.format(xmin, ymin,
+            '--architecture,{},'.format(args.architecture) if args.architecture is not None else '',
+            '--weights,{},'.format(args.weights) if args.weights is not None else '',
+            '--bounds,{},{},{},{},'.format(xmin, ymin,
                                            xmax, ymax) if args.bounds_clip else '',
+            '--backstop,{}'.format(result.get('backstop', False)),
         ])
         if args.dryrun:
             print(submission)

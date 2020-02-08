@@ -196,7 +196,10 @@ if __name__ == '__main__':
         cloud_detector = S2PixelCloudDetector(
             threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
         cloud_probs = cloud_detector.get_cloud_probability_maps(small_data)
-        cloud_probs = cloud_probs.astype(np.float32)
+        quantile = np.quantile(np.extract(cloud_probs > np.min(cloud_probs), cloud_probs), 0.20)
+        cutoff = max(0.01, quantile)
+        print('s2cloudless cutoff: {}'.format(cutoff))
+        cloud_probs = (cloud_probs > cutoff).astype(np.float32)
         tmp = np.zeros((1, width, height), dtype=np.float32)
         rasterio.warp.reproject(
             cloud_probs, tmp,
@@ -250,7 +253,7 @@ if __name__ == '__main__':
 
     # Write scratch file
     MASK_INDEX = 14-1
-    data[MASK_INDEX] = ((cloud_mask <= 0.4) * (data[0] != 0)).astype(np.uint16)
+    data[MASK_INDEX] = ((cloud_mask < 1.0) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
     data[MASK_INDEX] = data[MASK_INDEX] * args.index
