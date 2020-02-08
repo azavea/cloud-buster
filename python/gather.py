@@ -195,15 +195,9 @@ if __name__ == '__main__':
         threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
     cloud_probs = cloud_detector.get_cloud_probability_maps(small_data)
     cloud_probs = cloud_probs.astype(np.float32)
-    quantile = np.quantile(np.extract(
-        cloud_probs > np.min(cloud_probs), cloud_probs), 0.20)
-    element = np.ones((7, 7))
-    small_tmp = (cloud_probs > quantile).astype(np.uint8)
-    small_tmp[0] = scipy.ndimage.binary_erosion(
-        small_tmp[0], structure=element)
     tmp = np.zeros((1, width, height), dtype=np.float32)
     rasterio.warp.reproject(
-        small_tmp, tmp,
+        cloud_probs, tmp,
         src_transform=geoTransform * rasterio.transform.Affine.scale(16, 16),
         src_crs=crs,
         dst_transform=geoTransform,
@@ -216,7 +210,6 @@ if __name__ == '__main__':
             ds.write(tmp)
         profile.update(count=14, dtype=np.uint16)
     del tmp
-    del small_tmp
     del small_data
 
     # Get model cloud mask
@@ -244,7 +237,7 @@ if __name__ == '__main__':
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('reg').item()
                     tmp[0, xoffset:(xoffset+120), yoffset:(yoffset+120)] = out
-        cloud_mask = cloud_mask + (tmp / 0.4)
+        cloud_mask = cloud_mask + tmp
         if not args.delete:
             profile.update(count=1, dtype=np.float32)
             with rio.open('/tmp/inference.tif', 'w', **profile) as ds:
@@ -254,7 +247,7 @@ if __name__ == '__main__':
 
     # Write scratch file
     MASK_INDEX = 14-1
-    data[MASK_INDEX] = (cloud_mask <= 1.0).astype(np.uint16)
+    data[MASK_INDEX] = ((cloud_mask <= 0.4) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
     data[MASK_INDEX] = data[MASK_INDEX] * args.index
