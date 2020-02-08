@@ -64,7 +64,7 @@ if __name__ == '__main__':
             '--job-name {} '.format('{}-{}'.format(args.name, i)),
             '--job-queue {} '.format(args.jobqueue),
             '--job-definition {} '.format(args.jobdef),
-            '--container-overrides vcpus=1,memory=8000,',
+            '--container-overrides vcpus=2,memory=15000,',
             'command=./download_run.sh,{},'.format(args.gather),
             '--name,{},'.format(args.name),
             '--index,{},'.format(i),
