@@ -54,11 +54,13 @@ if __name__ == '__main__':
         '--job-name {} '.format(jobname),
         '--job-queue {} '.format(args.jobqueue),
         '--job-definition {} '.format(args.jobdef),
-        '--container-overrides ',
-        'command=./download_run.sh,{},'.format(merge),
+        '--container-overrides vcpus=8,memory=15000,',
+        'command=./download_run.sh,{},'.format(args.merge),
         '--input-path,{},'.format(args.input_path),
         '--name,{},'.format(args.name),
         '--output-path,{}'.format(args.output_path)
     ])
-    print(submission)
-    # os.system(submission)
+    if args.dryrun:
+        print(submission)
+    else:
+        os.system(submission)
