@@ -168,21 +168,24 @@ if __name__ == '__main__':
     if args.delete:
         os.system('rm -f /tmp/B*.jp2')
 
-    cloud_mask = np.zeros(out_shape, dtype=np.float32)
+    cloud_mask = np.zeros(out_shape, dtype=np.uint16)
 
     # Get the stock cloud mask
     if not args.backstop and os.path.isfile('/tmp/CLD_20m.jp2'):
         with rio.open('/tmp/CLD_20m.jp2') as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
-            cloud_mask = cloud_mask + (tmp / 100.0)
+            cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
         if args.delete:
             os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
     if not args.backstop:
-        small_data = np.zeros((13, width//16, height//16), dtype=np.uint16)
+        width_16 = width//16
+        height_16 = height//16
+
+        small_data = np.zeros((13, width_16, height_16), dtype=np.uint16)
         rasterio.warp.reproject(
             data[0:13], small_data,
             src_transform=geoTransform,
@@ -192,15 +195,16 @@ if __name__ == '__main__':
             dst_crs=crs,
             resampling=rasterio.enums.Resampling.nearest)
         small_data = np.transpose(small_data, axes=(1, 2, 0))
-        small_data = small_data.reshape(1, width//16, height//16, 13) / 1e5
+        small_data = small_data.reshape(1, width_16, height_16, 13) / 1e5
         cloud_detector = S2PixelCloudDetector(
             threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
         small_tmp = cloud_detector.get_cloud_probability_maps(small_data)
-        quantile = np.quantile(np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
+        quantile = np.quantile(
+            np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
         cutoff = max(0.01, quantile)
-        print('s2cloudless cutoff: {}'.format(cutoff))
-        small_tmp = (small_tmp > cutoff).astype(np.float32)
-        tmp = np.zeros((1, width, height), dtype=np.float32)
+        small_tmp = (small_tmp > cutoff).astype(np.uint16)
+
+        tmp = np.zeros((1, width, height), dtype=np.uint16)
         rasterio.warp.reproject(
             small_tmp, tmp,
             src_transform=geoTransform *
@@ -209,12 +213,15 @@ if __name__ == '__main__':
             dst_transform=geoTransform,
             dst_crs=crs,
             resampling=rasterio.enums.Resampling.nearest)
+
         cloud_mask = cloud_mask + tmp
+
         if not args.delete:
             profile.update(count=1, dtype=np.float32)
             with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14, dtype=np.uint16)
+
         del tmp
         del small_tmp
         del small_data
@@ -223,6 +230,7 @@ if __name__ == '__main__':
     if not args.backstop and args.architecture is not None and args.weights is not None:
         width_3 = width//3
         height_3 = height//3
+
         small_data = np.zeros((13, width_3, height_3), dtype=np.uint16)
         rasterio.warp.reproject(
             data[0:13], small_data,
@@ -232,8 +240,7 @@ if __name__ == '__main__':
             rasterio.transform.Affine.scale(3, 3),
             dst_crs=crs,
             resampling=rasterio.enums.Resampling.nearest)
-        tmp = np.zeros((1, width, height), dtype=np.float32)
-        small_tmp = np.zeros((1, width_3, height_3), dtype=np.float32)
+
         load_architecture(args.architecture)
         device = torch.device('cpu')
         if not os.path.exists('/tmp/weights.pth'):
@@ -242,6 +249,8 @@ if __name__ == '__main__':
                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
             '/tmp/weights.pth', map_location=device))
+
+        small_tmp = np.zeros((1, width_3, height_3), dtype=np.float32)
         with torch.no_grad():
             for xoffset in range(0, width_3, 40):
                 if xoffset + 40 > width_3:
@@ -251,11 +260,14 @@ if __name__ == '__main__':
                     if yoffset + 40 > height_3:
                         yoffset = height_3 - 40 - 1
                     window = small_data[0:13,
-                                  xoffset:(xoffset+40),
-                                  yoffset:(yoffset+40)].reshape(1, 13, 40, 40).astype(np.float32)
+                                        xoffset:(xoffset+40),
+                                        yoffset:(yoffset+40)].reshape(1, 13, 40, 40).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('reg').item()
-                    small_tmp[0, xoffset:(xoffset+40), yoffset:(yoffset+40)] = out
+                    small_tmp[0, xoffset:(xoffset+40),
+                              yoffset:(yoffset+40)] = out
+
+        tmp = np.zeros((1, width, height), dtype=np.float32)
         rasterio.warp.reproject(
             small_tmp, tmp,
             src_transform=geoTransform *
@@ -264,19 +276,22 @@ if __name__ == '__main__':
             dst_transform=geoTransform,
             dst_crs=crs,
             resampling=rasterio.enums.Resampling.nearest)
-        cloud_mask = cloud_mask + tmp
+
+        cloud_mask = cloud_mask + (tmp > 0.0).astype(uint16)
+
         if not args.delete:
             profile.update(count=1, dtype=np.float32)
             with rio.open('/tmp/inference.tif', 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14, dtype=np.uint16)
+
         del tmp
         del small_tmp
         del small_data
 
     # Write scratch file
     MASK_INDEX = 14-1
-    data[MASK_INDEX] = ((cloud_mask < 1.0) * (data[0] != 0)).astype(np.uint16)
+    data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
     data[MASK_INDEX] = data[MASK_INDEX] * args.index
