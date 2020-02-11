@@ -195,14 +195,14 @@ if __name__ == '__main__':
         small_data = small_data.reshape(1, width//16, height//16, 13) / 1e5
         cloud_detector = S2PixelCloudDetector(
             threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
-        cloud_probs = cloud_detector.get_cloud_probability_maps(small_data)
-        quantile = np.quantile(np.extract(cloud_probs > np.min(cloud_probs), cloud_probs), 0.20)
+        small_tmp = cloud_detector.get_cloud_probability_maps(small_data)
+        quantile = np.quantile(np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
         cutoff = max(0.01, quantile)
         print('s2cloudless cutoff: {}'.format(cutoff))
-        cloud_probs = (cloud_probs > cutoff).astype(np.float32)
+        small_tmp = (small_tmp > cutoff).astype(np.float32)
         tmp = np.zeros((1, width, height), dtype=np.float32)
         rasterio.warp.reproject(
-            cloud_probs, tmp,
+            small_tmp, tmp,
             src_transform=geoTransform *
             rasterio.transform.Affine.scale(16, 16),
             src_crs=crs,
@@ -216,11 +216,24 @@ if __name__ == '__main__':
                 ds.write(tmp)
             profile.update(count=14, dtype=np.uint16)
         del tmp
+        del small_tmp
         del small_data
 
     # Get model cloud mask
     if not args.backstop and args.architecture is not None and args.weights is not None:
+        width_3 = width//3
+        height_3 = height//3
+        small_data = np.zeros((13, width_3, height_3), dtype=np.uint16)
+        rasterio.warp.reproject(
+            data[0:13], small_data,
+            src_transform=geoTransform,
+            src_crs=crs,
+            dst_transform=geoTransform *
+            rasterio.transform.Affine.scale(3, 3),
+            dst_crs=crs,
+            resampling=rasterio.enums.Resampling.nearest)
         tmp = np.zeros((1, width, height), dtype=np.float32)
+        small_tmp = np.zeros((1, width_3, height_3), dtype=np.float32)
         load_architecture(args.architecture)
         device = torch.device('cpu')
         if not os.path.exists('/tmp/weights.pth'):
@@ -230,19 +243,27 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(
             '/tmp/weights.pth', map_location=device))
         with torch.no_grad():
-            for xoffset in range(0, width, 120):
-                if xoffset + 120 > width:
-                    xoffset = width - 120 - 1
-                print('{:02.3f}%'.format(100 * (xoffset / width)))
-                for yoffset in range(0, height, 120):
-                    if yoffset + 120 > height:
-                        yoffset = height - 120 - 1
-                    window = data[0:13,
-                                  xoffset:(xoffset+120),
-                                  yoffset:(yoffset+120)].reshape(1, 13, 120, 120).astype(np.float32)
+            for xoffset in range(0, width_3, 40):
+                if xoffset + 40 > width_3:
+                    xoffset = width_3 - 40 - 1
+                print('{:02.3f}%'.format(100 * (xoffset / width_3)))
+                for yoffset in range(0, height_3, 40):
+                    if yoffset + 40 > height_3:
+                        yoffset = height_3 - 40 - 1
+                    window = small_data[0:13,
+                                  xoffset:(xoffset+40),
+                                  yoffset:(yoffset+40)].reshape(1, 13, 40, 40).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('reg').item()
-                    tmp[0, xoffset:(xoffset+120), yoffset:(yoffset+120)] = out
+                    small_tmp[0, xoffset:(xoffset+40), yoffset:(yoffset+40)] = out
+        rasterio.warp.reproject(
+            small_tmp, tmp,
+            src_transform=geoTransform *
+            rasterio.transform.Affine.scale(3, 3),
+            src_crs=crs,
+            dst_transform=geoTransform,
+            dst_crs=crs,
+            resampling=rasterio.enums.Resampling.nearest)
         cloud_mask = cloud_mask + tmp
         if not args.delete:
             profile.update(count=1, dtype=np.float32)
@@ -250,6 +271,8 @@ if __name__ == '__main__':
                 ds.write(tmp)
             profile.update(count=14, dtype=np.uint16)
         del tmp
+        del small_tmp
+        del small_data
 
     # Write scratch file
     MASK_INDEX = 14-1
