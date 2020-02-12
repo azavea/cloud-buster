@@ -289,6 +289,9 @@ if __name__ == '__main__':
         del small_tmp
         del small_data
 
+    element = np.ones((7,7))
+    cloud_mask[0] = scipy.ndimage.binary_dilation(cloud_mask[0], structure=element)
+
     # Write scratch file
     MASK_INDEX = 14-1
     data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
