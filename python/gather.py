@@ -217,10 +217,10 @@ if __name__ == '__main__':
         cloud_mask = cloud_mask + tmp
 
         if not args.delete:
-            profile.update(count=1, dtype=np.float32)
+            profile.update(count=1)
             with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
                 ds.write(tmp)
-            profile.update(count=14, dtype=np.uint16)
+            profile.update(count=14)
 
         del tmp
         del small_tmp
@@ -277,13 +277,14 @@ if __name__ == '__main__':
             dst_crs=crs,
             resampling=rasterio.enums.Resampling.nearest)
 
-        cloud_mask = cloud_mask + (tmp > 0.0).astype(uint16)
+        tmp = (tmp > 0.0).astype(np.uint16)
+        cloud_mask = cloud_mask + tmp
 
         if not args.delete:
-            profile.update(count=1, dtype=np.float32)
+            profile.update(count=1)
             with rio.open('/tmp/inference.tif', 'w', **profile) as ds:
                 ds.write(tmp)
-            profile.update(count=14, dtype=np.uint16)
+            profile.update(count=14)
 
         del tmp
         del small_tmp
@@ -291,6 +292,12 @@ if __name__ == '__main__':
 
     element = np.ones((7,7))
     cloud_mask[0] = scipy.ndimage.binary_dilation(cloud_mask[0], structure=element)
+
+    if not args.delete:
+        profile.update(count=1)
+        with rio.open('/tmp/cloud_mask.tif', 'w', **profile) as ds:
+            ds.write(cloud_mask)
+        profile.update(count=14)
 
     # Write scratch file
     MASK_INDEX = 14-1
