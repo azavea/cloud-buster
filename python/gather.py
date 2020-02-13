@@ -199,8 +199,11 @@ if __name__ == '__main__':
         cloud_detector = S2PixelCloudDetector(
             threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
         small_tmp = cloud_detector.get_cloud_probability_maps(small_data)
-        quantile = np.quantile(
-            np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
+        try:
+            quantile = np.quantile(
+                np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
+        except:
+            quantile = 0.01
         cutoff = max(0.01, quantile)
         small_tmp = (small_tmp > cutoff).astype(np.uint16)
 
@@ -290,8 +293,9 @@ if __name__ == '__main__':
         del small_tmp
         del small_data
 
-    element = np.ones((11,11))
-    cloud_mask[0] = scipy.ndimage.binary_dilation(cloud_mask[0], structure=element)
+    element = np.ones((11, 11))
+    cloud_mask[0] = scipy.ndimage.binary_dilation(
+        cloud_mask[0], structure=element)
 
     if not args.delete:
         profile.update(count=1)
