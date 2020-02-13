@@ -290,7 +290,7 @@ if __name__ == '__main__':
         del small_tmp
         del small_data
 
-    element = np.ones((7,7))
+    element = np.ones((11,11))
     cloud_mask[0] = scipy.ndimage.binary_dilation(cloud_mask[0], structure=element)
 
     if not args.delete:
