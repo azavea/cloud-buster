@@ -166,9 +166,10 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--aoi-name', required=False, type=str)
     parser.add_argument('--geojson', required=True, type=str)
     parser.add_argument('--limit', required=False, default=1024, type=int)
-    parser.add_argument('--name-property', required=True, type=str)
+    parser.add_argument('--name-property', required=False, type=str)
     parser.add_argument('--refresh-token', required=True, type=str)
     parser.add_argument('--response', required=False, type=str)
+    parser.add_argument('--maxclouds', required=False, default=20, type=int)
     return parser
 
 
@@ -191,7 +192,7 @@ if __name__ == '__main__':
     geo_filter = {
         "minAcquisitionDate": "1307-10-13",
         "maxAcquisitionDate": "2038-01-19",
-        "maxCloudCover": 20,
+        "maxCloudCover": args.maxclouds,
         "overlapPercentage": 50.0,
         "limit": args.limit
     }
