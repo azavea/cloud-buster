@@ -77,7 +77,7 @@ if __name__ == '__main__':
         print(areas)
         return sum(areas) > 0
 
-    while not_covered():
+    while not_covered() and len(results) > 0:
         i_best = -1
         j_best = -1
         area_best = 0.0
@@ -98,7 +98,7 @@ if __name__ == '__main__':
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
 
-    while not_backstopped() and args.backstop:
+    while not_backstopped() and args.backstop and len(results) > 0:
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
