@@ -39,7 +39,8 @@ import shapely.ops  # type: ignore
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backstop', required=False, default=True, type=ast.literal_eval)
+    parser.add_argument('--backstop', required=False,
+                        default=True, type=ast.literal_eval)
     parser.add_argument('--coverage-count',
                         required=False, default=3, type=int)
     parser.add_argument('--input', required=True, type=str)
@@ -66,15 +67,15 @@ if __name__ == '__main__':
 
     selections = []
 
-    def not_covered():
-        areas = list(map(lambda s: s.area, shapes))
-        print(areas)
-        return sum(areas) > 0
-
     def not_backstopped():
         area = backstop.area
         print(area)
         return area
+
+    def not_covered():
+        areas = list(map(lambda s: s.area, shapes))
+        print(areas)
+        return sum(areas) > 0
 
     while not_covered():
         i_best = -1

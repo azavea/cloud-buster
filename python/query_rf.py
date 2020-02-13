@@ -166,7 +166,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--aoi-name', required=False, type=str)
     parser.add_argument('--geojson', required=True, type=str)
     parser.add_argument('--limit', required=False, default=1024, type=int)
-    parser.add_argument('--name-property', type=str, default='Prod_ID')
+    parser.add_argument('--name-property', required=True, type=str)
     parser.add_argument('--refresh-token', required=True, type=str)
     parser.add_argument('--response', required=False, type=str)
     return parser

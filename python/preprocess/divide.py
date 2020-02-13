@@ -27,51 +27,36 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
-import copy
-import subprocess
-import sys
+import json
 
-import numpy as np
-import rasterio as rio
-import rasterio.enums
-
-try:
-    from s2cloudless import S2PixelCloudDetector
-except:
-    # https://stackoverflow.com/a/50255019
-    subprocess.check_call(
-        [sys.executable, '-m', 'pip', 'install', 's2cloudless'])
-    from s2cloudless import S2PixelCloudDetector
+import shapely.geometry  # type: ignore
 
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--output-stem', required=True, type=str)
     return parser
 
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    with rio.open(args.input, 'r') as ds:
-        width = ds.width
-        height = ds.height
-        data = ds.read(out_shape=(ds.count, width // 16, height // 16),
-                       resampling=rasterio.enums.Resampling.nearest)
-        profile = copy.copy(ds.profile)
-    profile.update(count=1, dtype=np.uint8)
-    data = data[0:13, :, :]
-    data = np.transpose(data, axes=(1, 2, 0))
-    (x, y, c) = data.shape
-    data = data.reshape(1, x, y, c) / 1e5
+    with open(args.input, 'r') as f:
+        data = json.load(f)
 
-    cloud_detector = S2PixelCloudDetector(
-        threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
-    cloud_probs = cloud_detector.get_cloud_probability_maps(data)
-    cloud_probs = cloud_probs.astype(np.float32)
-    quantile = np.quantile(cloud_probs, 0.20)
-    cloud_mask = (cloud_probs > quantile).astype(np.uint8)
+    shape = shapely.geometry.shape(data.get('features')[0].get('geometry'))
+    (xmin, ymin, xmax, ymax) = shape.bounds
 
-    with rio.open(args.output, 'w', **profile) as ds:
-        ds.write(cloud_mask)
+    for i in range(0, 4):
+        x1 = xmin + (i + 0)*((xmax - xmin) / 4)
+        x2 = xmin + (i + 1)*((xmax - xmin) / 4)
+        for j in range(0, 4):
+            y1 = ymin + (j + 0)*((ymax - ymin)/4)
+            y2 = ymin + (j + 1)*((ymax - ymin)/4)
+            box = shapely.geometry.box(x1, y1, x2, y2)
+            data['features'][0]['geometry'] = shapely.geometry.mapping(box)
+
+            with open('{}_{:02d}_{:02d}.geojson'.format(args.output_stem, i, j), 'w') as f:
+                json.dump(data, f, sort_keys=True,
+                          indent=4, separators=(',', ': '))
