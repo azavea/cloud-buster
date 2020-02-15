@@ -43,6 +43,7 @@ def cli_parser() -> argparse.ArgumentParser:
                         default=True, type=ast.literal_eval)
     parser.add_argument('--coverage-count',
                         required=False, default=3, type=int)
+    parser.add_argument('--max-selections', required=False, type=int)
     parser.add_argument('--input', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
     return parser
@@ -77,7 +78,10 @@ if __name__ == '__main__':
         print(areas)
         return sum(areas) > 0
 
-    while not_covered():
+    def enough_selected():
+        return (args.max_selections is not None) and (len(selections) >= args.max_selections)
+
+    while not_covered() and not enough_selected() and len(results) > 0:
         i_best = -1
         j_best = -1
         area_best = 0.0
@@ -93,12 +97,14 @@ if __name__ == '__main__':
                     j_best = j
                     i_best = i
                     area_best = area
+        if area_best <= 0.0:
+            break
         shapes[j_best] = shapes[j_best].difference(
             results[i_best].get('dataShape'))
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
 
-    while not_backstopped() and args.backstop:
+    while not_backstopped() and args.backstop and not enough_selected() and len(results) > 0:
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
@@ -110,6 +116,8 @@ if __name__ == '__main__':
             if area > area_best:
                 i_best = i
                 area_best = area
+        if area_best <= 0.0:
+            break
         backstop = backstop.difference(results[i_best].get('dataShape'))
         results[i_best]['backstop'] = True
         selections.append(results[i_best])
@@ -123,6 +131,8 @@ if __name__ == '__main__':
         'selections': selections
     }
 
+    if not_backstopped() or not_covered():
+        print('WARNING: not covered')
     with open(args.output, 'w') as f:
         json.dump(selections, f, sort_keys=True,
-                  indent=4, separators=(',', ': '))
+                    indent=4, separators=(',', ': '))
