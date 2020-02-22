@@ -84,6 +84,8 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--sentinel-path', required=True, type=str)
     parser.add_argument('--architecture', required=False, type=str)
     parser.add_argument('--weights', required=False, type=str)
+    parser.add_argument('--s2cloudless', required=False,
+                        default=False, type=ast.literal_eval)
     return parser
 
 
@@ -181,7 +183,7 @@ if __name__ == '__main__':
             os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
-    if not args.backstop:
+    if not args.backstop and args.s2cloudless is not False:
         width_16 = width//16
         height_16 = height//16
 
