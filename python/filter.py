@@ -79,7 +79,7 @@ if __name__ == '__main__':
         return sum(areas) > 0
 
     def enough_selected():
-        return (args.max_selections is not None) and (len(selections) >= args.max_selections)
+        return (args.max_selections is not None) and (len(selections) > args.max_selections)
 
     while not_covered() and not enough_selected() and len(results) > 0:
         i_best = -1
