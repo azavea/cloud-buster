@@ -131,7 +131,7 @@ if __name__ == '__main__':
         'selections': selections
     }
 
-    if not_backstopped() or not_covered():
+    if (args.backstop and not_backstopped()) or not_covered():
         print('WARNING: not covered')
     with open(args.output, 'w') as f:
         json.dump(selections, f, sort_keys=True,
