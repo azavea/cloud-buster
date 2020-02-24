@@ -84,6 +84,8 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--sentinel-path', required=True, type=str)
     parser.add_argument('--architecture', required=False, type=str)
     parser.add_argument('--weights', required=False, type=str)
+    parser.add_argument('--s2cloudless', required=False,
+                        default=False, type=ast.literal_eval)
     return parser
 
 
@@ -181,7 +183,7 @@ if __name__ == '__main__':
             os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
-    if not args.backstop:
+    if not args.backstop and args.s2cloudless is not False:
         width_16 = width//16
         height_16 = height//16
 
@@ -203,8 +205,8 @@ if __name__ == '__main__':
             quantile = np.quantile(
                 np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
         except:
-            quantile = 0.01
-        cutoff = max(0.01, quantile)
+            quantile = 0.0033
+        cutoff = max(0.0033, quantile)
         small_tmp = (small_tmp > cutoff).astype(np.uint16)
 
         tmp = np.zeros((1, width, height), dtype=np.uint16)
@@ -231,19 +233,7 @@ if __name__ == '__main__':
 
     # Get model cloud mask
     if not args.backstop and args.architecture is not None and args.weights is not None:
-        width_3 = width//3
-        height_3 = height//3
-
-        small_data = np.zeros((13, width_3, height_3), dtype=np.uint16)
-        rasterio.warp.reproject(
-            data[0:13], small_data,
-            src_transform=geoTransform,
-            src_crs=crs,
-            dst_transform=geoTransform *
-            rasterio.transform.Affine.scale(3, 3),
-            dst_crs=crs,
-            resampling=rasterio.enums.Resampling.nearest)
-
+        model_window_size = 512
         load_architecture(args.architecture)
         device = torch.device('cpu')
         if not os.path.exists('/tmp/weights.pth'):
@@ -252,33 +242,23 @@ if __name__ == '__main__':
                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
             '/tmp/weights.pth', map_location=device))
+        model = model.eval()
 
-        small_tmp = np.zeros((1, width_3, height_3), dtype=np.float32)
         with torch.no_grad():
-            for xoffset in range(0, width_3, 40):
-                if xoffset + 40 > width_3:
-                    xoffset = width_3 - 40 - 1
-                print('{:02.3f}%'.format(100 * (xoffset / width_3)))
-                for yoffset in range(0, height_3, 40):
-                    if yoffset + 40 > height_3:
-                        yoffset = height_3 - 40 - 1
-                    window = small_data[0:13,
-                                        xoffset:(xoffset+40),
-                                        yoffset:(yoffset+40)].reshape(1, 13, 40, 40).astype(np.float32)
+            tmp = np.zeros((1, width, height), dtype=np.float32)
+            for xoffset in range(0, width, model_window_size):
+                if xoffset + model_window_size > width:
+                    xoffset = width - model_window_size - 1
+                print('{:02.3f}%'.format(100 * (xoffset / width)))
+                for yoffset in range(0, height, model_window_size):
+                    if yoffset + model_window_size > height:
+                        yoffset = height - model_window_size - 1
+                    window = data[0:13, xoffset:(xoffset+model_window_size), yoffset:(
+                        yoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
-                    out = model(tensor).get('reg').item()
-                    small_tmp[0, xoffset:(xoffset+40),
-                              yoffset:(yoffset+40)] = out
-
-        tmp = np.zeros((1, width, height), dtype=np.float32)
-        rasterio.warp.reproject(
-            small_tmp, tmp,
-            src_transform=geoTransform *
-            rasterio.transform.Affine.scale(3, 3),
-            src_crs=crs,
-            dst_transform=geoTransform,
-            dst_crs=crs,
-            resampling=rasterio.enums.Resampling.nearest)
+                    out = model(tensor).get('2seg').numpy()
+                    tmp[0, xoffset:(xoffset+model_window_size),
+                        yoffset:(yoffset+model_window_size)] = out
 
         tmp = (tmp > 0.0).astype(np.uint16)
         cloud_mask = cloud_mask + tmp
@@ -290,8 +270,6 @@ if __name__ == '__main__':
             profile.update(count=14)
 
         del tmp
-        del small_tmp
-        del small_data
 
     element = np.ones((11, 11))
     cloud_mask[0] = scipy.ndimage.binary_dilation(
