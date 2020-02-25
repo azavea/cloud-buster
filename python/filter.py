@@ -31,6 +31,7 @@ import ast
 import copy
 import json
 import os
+import re
 
 import shapely.affinity  # type: ignore
 import shapely.geometry  # type: ignore
@@ -46,6 +47,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--max-selections', required=False, type=int)
     parser.add_argument('--input', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--date-regexp', required=False, type=str)
     return parser
 
 
@@ -56,6 +58,10 @@ if __name__ == '__main__':
         response = json.load(f)
 
     results = response.get('results')
+    if args.date_regexp:
+        results = list(filter(lambda r: re.search(
+            args.date_regexp, r.get('createdAt')) is not None, results))
+
     for result in results:
         result['dataShape'] = shapely.geometry.shape(
             result.get('dataFootprint'))
@@ -135,4 +141,4 @@ if __name__ == '__main__':
         print('WARNING: not covered')
     with open(args.output, 'w') as f:
         json.dump(selections, f, sort_keys=True,
-                    indent=4, separators=(',', ': '))
+                  indent=4, separators=(',', ': '))
