@@ -51,7 +51,7 @@ if __name__ == '__main__':
     args = cli_parser().parse_args()
 
     command = ''.join([
-        'python3 python/query_rf.py ',
+        'python3 /workspace/query_rf.py ',
         '--geojson {} '.format(args.geojson),
         '--limit {} '.format(max(64, args.images)),
         '--refresh-token {} '.format(args.refresh_token),
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         raise Exception()
 
     command = ''.join([
-        'python3 python/filter.py ',
+        'python3 /workspace/filter.py ',
         '--backstop False ',
         '--coverage-count {} '.format(args.images),
         '--max-selections {} '.format(args.images),
@@ -81,6 +81,8 @@ if __name__ == '__main__':
     with open('/tmp/filtered.json', 'r') as f:
         data = json.load(f)
     data['selections'] = data['selections'][0:args.images]
+
+    os.system('mkdir -p {}'.format(args.output_dir))
 
     i = 0
     for (selection, index) in zip(data['selections'], range(0, len(data))):
