@@ -170,6 +170,8 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--refresh-token', required=True, type=str)
     parser.add_argument('--response', required=False, type=str)
     parser.add_argument('--maxclouds', required=False, default=20, type=int)
+    parser.add_argument('--mindate', required=False, type=str, default='1307-10-13')
+    parser.add_argument('--maxdate', required=False, type=str, default='2038-01-19')
     return parser
 
 
@@ -190,8 +192,8 @@ if __name__ == '__main__':
     rf_shape = rf_client.create_shape(
         shapely.geometry.mapping(shape), str(uuid4()))
     geo_filter = {
-        "minAcquisitionDate": "1307-10-13",
-        "maxAcquisitionDate": "2038-01-19",
+        "minAcquisitionDate": args.mindate,
+        "maxAcquisitionDate": args.maxdate,
         "maxCloudCover": args.maxclouds,
         "overlapPercentage": 50.0,
         "limit": args.limit
