@@ -180,8 +180,14 @@ if __name__ == '__main__':
 
     with open(args.geojson, 'r') as f:
         features = json.load(f)
-    feature = features.get('features')[0]
-    shape = shapely.geometry.shape(feature.get('geometry'))
+
+    def convert_and_scale(f):
+        tmp = shapely.geometry.shape(f.get('geometry'))
+        tmp = shapely.affinity.scale(tmp, 1.05, 1.05)
+        return tmp
+
+    feature = list(map(convert_and_scale, features.get('features')))
+    shape = shapely.ops.cascaded_union(feature)
     shape = shapely.affinity.scale(shape, 1.05, 1.05)
 
     if args.aoi_name is None:
