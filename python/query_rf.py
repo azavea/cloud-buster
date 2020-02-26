@@ -170,8 +170,10 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--refresh-token', required=True, type=str)
     parser.add_argument('--response', required=False, type=str)
     parser.add_argument('--maxclouds', required=False, default=20, type=int)
-    parser.add_argument('--mindate', required=False, type=str, default='1307-10-13')
-    parser.add_argument('--maxdate', required=False, type=str, default='2038-01-19')
+    parser.add_argument('--mindate', required=False,
+                        type=str, default='1307-10-13')
+    parser.add_argument('--maxdate', required=False,
+                        type=str, default='2038-01-19')
     return parser
 
 
