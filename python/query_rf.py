@@ -171,9 +171,9 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--response', required=False, type=str)
     parser.add_argument('--maxclouds', required=False, default=20, type=int)
     parser.add_argument('--mindate', required=False,
-                        type=str, default='1307-10-13')
+                        nargs='+', type=str, default=['1307-10-13'])
     parser.add_argument('--maxdate', required=False,
-                        type=str, default='2038-01-19')
+                        nargs='+', type=str, default=['2038-01-19'])
     return parser
 
 
@@ -195,25 +195,26 @@ if __name__ == '__main__':
     if args.aoi_name is None and args.name_property is not None:
         args.aoi_name = feature.get('properties').get(args.name_property)
 
+    sentinel_scenes = {
+        'results': [],
+        'aoi': shapely.geometry.mapping(shape)
+    }
+
     rf_client = RFClient(args.refresh_token,
                          'https://app.rasterfoundry.com/api')
     rf_shape = rf_client.create_shape(
         shapely.geometry.mapping(shape), str(uuid4()))
-    geo_filter = {
-        "minAcquisitionDate": args.mindate,
-        "maxAcquisitionDate": args.maxdate,
-        "maxCloudCover": args.maxclouds,
-        "overlapPercentage": 50.0,
-        "limit": args.limit
-    }
-    rf_params = RFClient.rf_params_from_geo_filter(
-        geo_filter, rf_shape.get('id'))
-    sentinel_scenes = rf_client.list_scenes(rf_params)
-
-    sentinel_scenes = {
-        'results': sentinel_scenes['results'],
-        'aoi': shapely.geometry.mapping(shape)
-    }
+    for (mindate, maxdate) in zip(args.mindate, args.maxdate):
+        geo_filter = {
+            "minAcquisitionDate": mindate,
+            "maxAcquisitionDate": maxdate,
+            "maxCloudCover": args.maxclouds,
+            "overlapPercentage": 50.0,
+            "limit": args.limit
+        }
+        rf_params = RFClient.rf_params_from_geo_filter(
+            geo_filter, rf_shape.get('id'))
+        sentinel_scenes['results'] += rf_client.list_scenes(rf_params).get('results')
 
     if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
