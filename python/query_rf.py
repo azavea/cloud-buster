@@ -174,7 +174,6 @@ def cli_parser() -> argparse.ArgumentParser:
                         type=str, default='1307-10-13')
     parser.add_argument('--maxdate', required=False,
                         type=str, default='2038-01-19')
-    parser.add_argument('--minclouds', default=0.0, type=float)
     return parser
 
 
@@ -215,8 +214,6 @@ if __name__ == '__main__':
         'results': sentinel_scenes['results'],
         'aoi': shapely.geometry.mapping(shape)
     }
-    sentinel_scenes['results'] = list(filter(
-        lambda s: float(s['sceneMetadata']['cloudyPixelPercentage']) > args.minclouds, sentinel_scenes['results']))
 
     if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
