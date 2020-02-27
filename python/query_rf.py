@@ -192,7 +192,7 @@ if __name__ == '__main__':
     shape = shapely.ops.cascaded_union(feature)
     shape = shapely.affinity.scale(shape, 1.05, 1.05)
 
-    if args.aoi_name is None:
+    if args.aoi_name is None and args.name_property is not None:
         args.aoi_name = feature.get('properties').get(args.name_property)
 
     rf_client = RFClient(args.refresh_token,
@@ -209,11 +209,14 @@ if __name__ == '__main__':
     rf_params = RFClient.rf_params_from_geo_filter(
         geo_filter, rf_shape.get('id'))
     sentinel_scenes = rf_client.list_scenes(rf_params)
+
+    sentinel_scenes = {'results': sentinel_scenes['results']}
     sentinel_scenes['aoi'] = shapely.geometry.mapping(shape)
 
-    if args.response is None:
+    if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
-    with open(args.response, 'w') as f:
-        json.dump(sentinel_scenes, f, sort_keys=True,
-                  indent=4, separators=(',', ': '))
-    print(args.response)
+    if args.response is not None:
+        with open(args.response, 'w') as f:
+            json.dump(sentinel_scenes, f, sort_keys=True,
+                    indent=4, separators=(',', ': '))
+        print(args.response)
