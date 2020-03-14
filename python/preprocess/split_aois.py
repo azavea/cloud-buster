@@ -48,4 +48,5 @@ if __name__ == '__main__':
         properties = feature.get('properties')
         name = properties.get(args.name_property)
         with open('{}-{}.geojson'.format(args.output_stem, name), 'w') as f:
-            json.dump(out_data, f)
+            json.dump(out_data, f, sort_keys=True,
+                      indent=4, separators=(',', ': '))
