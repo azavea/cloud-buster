@@ -48,7 +48,9 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--input', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
     parser.add_argument('--date-regexp', required=False, type=str)
+    parser.add_argument('--name-regexp', required=False, type=str)
     parser.add_argument('--minclouds', default=0.0, type=float)
+    parser.add_argument('--max-uncovered', default=1e-4, type=float)
     return parser
 
 
@@ -61,6 +63,10 @@ if __name__ == '__main__':
     results = response.get('results')
     results = list(filter(lambda s: float(
         s['sceneMetadata']['cloudyPixelPercentage']) >= args.minclouds, results))
+
+    if args.name_regexp:
+        results = list(filter(lambda r: re.search(
+            args.name_regexp, r.get('name')) is not None, results))
 
     if args.date_regexp:
         results = list(filter(lambda r: re.search(
@@ -78,13 +84,21 @@ if __name__ == '__main__':
 
     selections = []
 
+    uncovered_backstop = None
+
     def not_backstopped():
         area = backstop.area
+        global uncovered_backstop
+        uncovered_backstop = area
         print(area)
         return area
 
+    uncovered_area = None
+
     def not_covered():
         areas = list(map(lambda s: s.area, shapes))
+        global uncovered_area
+        uncovered_area = min(areas)
         print(areas)
         return sum(areas) > 0
 
@@ -141,8 +155,13 @@ if __name__ == '__main__':
         'selections': selections
     }
 
-    if (args.backstop and not_backstopped()) or not_covered():
+    if (args.backstop and (args.max_uncovered > uncovered_backstop) and (uncovered_backstop > 0)) or ((args.max_uncovered > uncovered_area) and (uncovered_area > 0)):
         print('WARNING: not covered')
+    if (args.backstop and (args.max_uncovered <= uncovered_backstop)) and (args.max_uncovered <= uncovered_area):
+        print('FAILED: not enough coverage')
+        with open(args.output + '.XXX', 'w') as f:
+            json.dump(selections, f, sort_keys=True,
+                      indent=4, separators=(',', ': '))
     with open(args.output, 'w') as f:
         json.dump(selections, f, sort_keys=True,
                   indent=4, separators=(',', ': '))
