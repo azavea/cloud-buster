@@ -91,7 +91,7 @@ if __name__ == '__main__':
         global uncovered_backstop
         uncovered_backstop = area
         print(area)
-        return area
+        return area > 0
 
     uncovered_area = None
 
