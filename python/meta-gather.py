@@ -46,6 +46,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--output-path', required=True, type=str)
     parser.add_argument('--response', required=True, type=str)
     parser.add_argument('--weights', required=False, type=str)
+    parser.add_argument('--index-start', required=False, default=1, type=int)
     return parser
 
 
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     [xmin, ymin, xmax, ymax] = response.get('bounds')
     results = response.get('selections')
 
-    idxs = range(1, len(results)+1)
+    idxs = range(args.index_start, len(results)+args.index_start)
     for (i, result) in zip(idxs, results):
         submission = ''.join([
             'aws batch submit-job ',
@@ -71,7 +72,8 @@ if __name__ == '__main__':
             '--output-path,{},'.format(args.output_path),
             '--sentinel-path,{},'.format(
                 result.get('sceneMetadata').get('path')),
-            '--architecture,{},'.format(args.architecture) if args.architecture is not None else '',
+            '--architecture,{},'.format(
+                args.architecture) if args.architecture is not None else '',
             '--weights,{},'.format(args.weights) if args.weights is not None else '',
             '--bounds,{},{},{},{},'.format(xmin, ymin,
                                            xmax, ymax) if args.bounds_clip else '',

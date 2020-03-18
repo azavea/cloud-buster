@@ -48,7 +48,9 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--input', required=True, type=str)
     parser.add_argument('--output', required=True, type=str)
     parser.add_argument('--date-regexp', required=False, type=str)
+    parser.add_argument('--name-regexp', required=False, type=str)
     parser.add_argument('--minclouds', default=0.0, type=float)
+    parser.add_argument('--max-uncovered', default=5e-4, type=float)
     return parser
 
 
@@ -61,6 +63,10 @@ if __name__ == '__main__':
     results = response.get('results')
     results = list(filter(lambda s: float(
         s['sceneMetadata']['cloudyPixelPercentage']) >= args.minclouds, results))
+
+    if args.name_regexp:
+        results = list(filter(lambda r: re.search(
+            args.name_regexp, r.get('name')) is not None, results))
 
     if args.date_regexp:
         results = list(filter(lambda r: re.search(
@@ -81,17 +87,18 @@ if __name__ == '__main__':
     def not_backstopped():
         area = backstop.area
         print(area)
-        return area
+        return area > args.max_uncovered
 
     def not_covered():
         areas = list(map(lambda s: s.area, shapes))
         print(areas)
-        return sum(areas) > 0
+        return sum(areas) > args.max_uncovered
 
     def enough_selected():
         return (args.max_selections is not None) and (len(selections) > args.max_selections)
 
-    while not_covered() and not enough_selected() and len(results) > 0:
+    # Primary coverage
+    while (not_covered()) and (not enough_selected()) and (len(results) > 0):
         i_best = -1
         j_best = -1
         area_best = 0.0
@@ -114,7 +121,8 @@ if __name__ == '__main__':
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
 
-    while not_backstopped() and args.backstop and not enough_selected() and len(results) > 0:
+    # Backstop
+    while (not_backstopped() and args.backstop) and (not enough_selected()) and (len(results) > 0):
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
@@ -141,8 +149,15 @@ if __name__ == '__main__':
         'selections': selections
     }
 
-    if (args.backstop and not_backstopped()) or not_covered():
-        print('WARNING: not covered')
-    with open(args.output, 'w') as f:
-        json.dump(selections, f, sort_keys=True,
-                  indent=4, separators=(',', ': '))
+    # Render results
+    if (not args.backstop or not not_backstopped()) and (not not_covered()):
+        with open(args.output, 'w') as f:
+            json.dump(selections, f, sort_keys=True,
+                      indent=4, separators=(',', ': '))
+    else:
+        print('ERROR: not covered')
+        with open(args.output + '.ERROR', 'w') as f:
+            if args.coverage_count == 0:
+                selections['selections'] = selections['selections'][0:1]
+            json.dump(selections, f, sort_keys=True,
+                      indent=4, separators=(',', ': '))
