@@ -34,17 +34,28 @@ import json
 import shapely.geometry
 import shapely.ops
 
+# Given a GeoJSON file covering the interesting part of the world, a
+# GeoJSON file containing some division of the world, and the
+# Sentinel-2 grid as a GeoJSON file, generate a list of tiles that
+# covers each intersection of the members of the first two.
+
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--world-geojson', required=True, type=str)
-    parser.add_argument('--world-property', required=True, type=str)
-    parser.add_argument('--number-geojson', required=True, type=str)
-    parser.add_argument('--number-property', required=True, type=str)
+    parser.add_argument('--world-geojson', required=True,
+                        type=str, help='The interesting part of the world')
+    parser.add_argument('--world-property', required=True, type=str,
+                        help='The property that names the members of the set')
+    parser.add_argument('--number-geojson', required=True,
+                        type=str, help='A division of the world')
+    parser.add_argument('--number-property', required=True, type=str,
+                        help='The property that gives the division number')
     parser.add_argument('--number-min', required=False, type=int, default=1)
     parser.add_argument('--number-max', required=False, type=int, default=5)
-    parser.add_argument('--grid-geojson', required=True, type=str)
-    parser.add_argument('--grid-property', required=True, type=str)
+    parser.add_argument('--grid-geojson', required=True,
+                        type=str, help='The Sentinel-2 grid')
+    parser.add_argument('--grid-property', required=False, default='Name',
+                        type=str, help='The Sentinel-2 property that names the grid cells')
     return parser
 
 

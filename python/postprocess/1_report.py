@@ -31,11 +31,13 @@ import copy
 import json
 import os
 
+# Given the location of a tif on S3, store a proto source report on
+# S3.  This can be run on AWS batch or locally.
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--input', required=True, type=str, help='The S3 location of the tif')
+    parser.add_argument('--output', required=True, type=str, help='The S3 location where the geojson report should go')
     return parser
 
 

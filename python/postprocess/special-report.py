@@ -27,6 +27,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import copy
 import gzip
 import json
@@ -34,13 +35,24 @@ import json
 import shapely.geometry
 import shapely.ops
 
+# Given a tile list, a directory containing source reports, and a
+# directory containing vectorized predictions, preduce three gzipped
+# files: a union of the source reports, a union (in either sense as
+# controlled by a toggle), and another of the same except with simplified geometry.
+
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tile-list', required=True, type=str)
-    parser.add_argument('--report-directory', required=True, type=str)
-    parser.add_argument('--prediction-directory', required=True, type=str)
-    parser.add_argument('--output-directory', required=True, type=str)
+    parser.add_argument('--tile-list', required=True, type=str,
+                        help='The file that contains the tile list')
+    parser.add_argument('--report-directory', required=True, type=str,
+                        help='The directory that contains the source reports')
+    parser.add_argument('--prediction-directory', required=True, type=str,
+                        help='The directory that contains the vectorized predictions')
+    parser.add_argument('--output-directory', required=True, type=str,
+                        help='The directory where the output should be written')
+    parser.add_argument('--easy-mode', required=False,
+                        type=ast.literal_eval, default=False, help='Whether to eschew finding the geometric union of the predictions')
     return parser
 
 
@@ -93,9 +105,11 @@ if __name__ == '__main__':
             print('Failed to read {}'.format(prediction_filename))
 
     try:
-        prediction_features = shapely.ops.cascaded_union(
-            prediction.get('features'))
-        prediction_features = list(prediction_features)
+        if args.easy_mode:
+            prediction_features = prediction.get('features')
+        else:
+            prediction_features = list(
+                shapely.ops.cascaded_union(prediction.get('features')))
         simplified_prediction_features = list(
             map(lambda s: s.simplify(0.001), prediction_features))
         prediction_features = list(map(shape_to_json, prediction_features))
@@ -119,7 +133,7 @@ if __name__ == '__main__':
         prediction['features'] = prediction_features
         with gzip.open(prediction_filename, 'w') as f:
             f.write(json.dumps(prediction, sort_keys=True,
-                            indent=4, separators=(',', ': ')).encode())
+                               indent=4, separators=(',', ': ')).encode())
 
     # Write simplified predictions
     if simplified_prediction_features is not None:
@@ -128,4 +142,4 @@ if __name__ == '__main__':
         prediction['features'] = simplified_prediction_features
         with gzip.open(simplified_prediction_filename, 'w') as f:
             f.write(json.dumps(prediction, sort_keys=True,
-                            indent=4, separators=(',', ': ')).encode())
+                               indent=4, separators=(',', ': ')).encode())
