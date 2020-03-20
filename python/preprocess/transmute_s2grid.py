@@ -63,6 +63,10 @@ if __name__ == '__main__':
             geometry = shapely.geometry.MultiPolygon(geometry)
         feature['geometry'] = geometry
 
+    # for feature in data.get('features'):
+    #     if not filter_geometry.contains(feature.get('geometry')):
+    #         print(feature.get('properties').get('Name'))
+
     # Filter features
     data['features'] = list(filter(
         lambda f: filter_geometry.intersects(f.get('geometry')), data.get('features')))
