@@ -92,14 +92,18 @@ if __name__ == '__main__':
         except:
             print('Failed to read {}'.format(prediction_filename))
 
-    prediction_features = shapely.ops.cascaded_union(
-        prediction.get('features'))
-    prediction_features = list(prediction_features)
-    simplified_prediction_features = list(
-        map(lambda s: s.simplify(0.001), prediction_features))
-    prediction_features = list(map(shape_to_json, prediction_features))
-    simplified_prediction_features = list(
-        map(shape_to_json, simplified_prediction_features))
+    try:
+        prediction_features = shapely.ops.cascaded_union(
+            prediction.get('features'))
+        prediction_features = list(prediction_features)
+        simplified_prediction_features = list(
+            map(lambda s: s.simplify(0.001), prediction_features))
+        prediction_features = list(map(shape_to_json, prediction_features))
+        simplified_prediction_features = list(
+            map(shape_to_json, simplified_prediction_features))
+    except:
+        prediction_features = None
+        simplified_prediction_features = None
 
     # Write reports
     report_filename = '{}/source-{}.geojson.gz'.format(
@@ -109,17 +113,19 @@ if __name__ == '__main__':
                            indent=4, separators=(',', ': ')).encode())
 
     # Write predictions
-    prediction_filename = '{}/prediction-{}.geojson.gz'.format(
-        args.output_directory, dataset_name)
-    prediction['features'] = prediction_features
-    with gzip.open(prediction_filename, 'w') as f:
-        f.write(json.dumps(prediction, sort_keys=True,
-                           indent=4, separators=(',', ': ')).encode())
+    if prediction_features is not None:
+        prediction_filename = '{}/prediction-{}.geojson.gz'.format(
+            args.output_directory, dataset_name)
+        prediction['features'] = prediction_features
+        with gzip.open(prediction_filename, 'w') as f:
+            f.write(json.dumps(prediction, sort_keys=True,
+                            indent=4, separators=(',', ': ')).encode())
 
     # Write simplified predictions
-    simplified_prediction_filename = '{}/simplified-prediction-{}.geojson.gz'.format(
-        args.output_directory, dataset_name)
-    prediction['features'] = simplified_prediction_features
-    with gzip.open(simplified_prediction_filename, 'w') as f:
-        f.write(json.dumps(prediction, sort_keys=True,
-                           indent=4, separators=(',', ': ')).encode())
+    if simplified_prediction_features is not None:
+        simplified_prediction_filename = '{}/simplified-prediction-{}.geojson.gz'.format(
+            args.output_directory, dataset_name)
+        prediction['features'] = simplified_prediction_features
+        with gzip.open(simplified_prediction_filename, 'w') as f:
+            f.write(json.dumps(prediction, sort_keys=True,
+                            indent=4, separators=(',', ': ')).encode())
