@@ -60,7 +60,7 @@ def cli_parser() -> argparse.ArgumentParser:
 
 def shape_to_json(f):
     return {
-        'type': 'Features',
+        'type': 'Feature',
         'geometry': shapely.geometry.mapping(f),
     }
 
