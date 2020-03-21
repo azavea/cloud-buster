@@ -26,47 +26,28 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-
 import argparse
 import copy
+import json
 import os
-import sys
 
-import numpy as np
-import rasterio as rio
-import scipy.ndimage
-
+# Given the location of a tif on S3, store a proto source report on
+# S3.  This can be run on AWS batch or locally.
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
-    parser.add_argument('--threshold', required=True, type=float)
-    parser.add_argument('--vector', required=True, type=str)
+    parser.add_argument('--input', required=True, type=str, help='The S3 location of the tif')
+    parser.add_argument('--output', required=True, type=str, help='The S3 location where the geojson report should go')
     return parser
 
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    with rio.open(args.input, 'r') as ds:
-        data = ds.read()
-        profile = copy.copy(ds.profile)
-    profile.update(compress=None, predictor=None, dtype=np.uint8, nodata=2)
-
-    element = np.ones((8, 8))
-    data = (data > args.threshold).astype(np.uint8)
-    data[0] = scipy.ndimage.binary_dilation(data[0], structure=element)
-
-    with rio.open(args.output, 'w', **profile) as ds:
-        ds.write((data > args.threshold).astype(np.uint8))
-
-    if args.vector is not None:
-        command = ''.join([
-            'gdal_rasterize ',
-            '-burn 2 ',
-            args.vector,
-            ' ',
-            args.output
-        ])
-        os.system(command)
+    input_name = copy.copy(args.input).replace('s3://', '/vsis3/')
+    info = json.loads(os.popen('gdalinfo -json {}'.format(input_name)).read())
+    [x, y] = info.get('size')
+    os.system('gdal_translate -b 14 -co TILED=YES -co SPARSE_OK=YES {} /tmp/out0.tif'.format(input_name))
+    os.system('gdalwarp -ts {} {} -r max -co TILED=YES -co SPARSE_OK=YES /tmp/out0.tif /tmp/out1.tif'.format(x//4, y//4))
+    os.system('gdal_polygonize.py /tmp/out1.tif -f GeoJSON /tmp/out.geojson')
+    os.system('aws s3 cp /tmp/out.geojson {}'.format(args.output))

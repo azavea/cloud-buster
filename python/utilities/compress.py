@@ -26,26 +26,34 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
+
 import argparse
 import copy
-import json
 import os
+import sys
 
+import numpy as np
+import rasterio as rio
+
+
+# Recompress imagery using deflate compression.  Used locally.
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--input', required=True,
+                        type=str, help='The input imagery')
+    parser.add_argument('--output', required=True,
+                        type=str, help='Compressed imagery')
     return parser
 
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    input_name = copy.copy(args.input).replace('s3://', '/vsis3/')
-    info = json.loads(os.popen('gdalinfo -json {}'.format(input_name)).read())
-    [x, y] = info.get('size')
-    os.system('gdal_translate -b 14 -co TILED=YES -co SPARSE_OK=YES {} /tmp/out0.tif'.format(input_name))
-    os.system('gdalwarp -ts {} {} -r max -co TILED=YES -co SPARSE_OK=YES /tmp/out0.tif /tmp/out1.tif'.format(x//4, y//4))
-    os.system('gdal_polygonize.py /tmp/out1.tif -f GeoJSON /tmp/out.geojson')
-    os.system('aws s3 cp /tmp/out.geojson {}'.format(args.output))
+    with rio.open(args.input, 'r') as ds:
+        data = ds.read()
+        profile = copy.copy(ds.profile)
+    profile.update(compress='deflate', predictor=2)
+
+    with rio.open(args.output, 'w', **profile) as ds:
+        ds.write(data)

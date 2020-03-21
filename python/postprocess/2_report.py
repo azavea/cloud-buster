@@ -31,18 +31,23 @@ import copy
 import gzip
 import json
 
+# Given a proto source report and a Raster Foundry response, store an
+# elaborated source report.  This is meant to be run locally after
+# having downloaded the proto source reports (e.g. with aws s3 sync).
+
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-json', help='The response',
+    parser.add_argument('--input-json', help='The Raster Foundry response from which to pull source information',
                         required=True, type=str)
     parser.add_argument('--scramble-json',
                         help='The scramble response', required=False, type=str)
     parser.add_argument('--scramble-index',
                         help='The scramble index', required=False, type=int)
     parser.add_argument('--input-geojson',
-                        help='The source report', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+                        help='The proto source report that contains unelaborated polygons', required=True, type=str)
+    parser.add_argument('--output', required=True, type=str,
+                        help='The local location to store the elaborated source report')
     return parser
 
 
