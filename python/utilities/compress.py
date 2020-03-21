@@ -34,15 +34,16 @@ import sys
 
 import numpy as np
 import rasterio as rio
-import scipy.ndimage
 
+
+# Recompress imagery using deflate compression.  Used locally.
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
-    parser.add_argument('--threshold', required=True, type=float)
-    parser.add_argument('--vector', required=True, type=str)
+    parser.add_argument('--input', required=True,
+                        type=str, help='The input imagery')
+    parser.add_argument('--output', required=True,
+                        type=str, help='Compressed imagery')
     return parser
 
 
@@ -52,21 +53,7 @@ if __name__ == '__main__':
     with rio.open(args.input, 'r') as ds:
         data = ds.read()
         profile = copy.copy(ds.profile)
-    profile.update(compress=None, predictor=None, dtype=np.uint8, nodata=2)
-
-    element = np.ones((8, 8))
-    data = (data > args.threshold).astype(np.uint8)
-    data[0] = scipy.ndimage.binary_dilation(data[0], structure=element)
+    profile.update(compress='deflate', predictor=2)
 
     with rio.open(args.output, 'w', **profile) as ds:
-        ds.write((data > args.threshold).astype(np.uint8))
-
-    if args.vector is not None:
-        command = ''.join([
-            'gdal_rasterize ',
-            '-burn 2 ',
-            args.vector,
-            ' ',
-            args.output
-        ])
-        os.system(command)
+        ds.write(data)

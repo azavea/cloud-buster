@@ -39,14 +39,24 @@ import rasterio.enums
 import rasterio.transform
 import rasterio.windows
 
+# A script to generate a single-band mosaic of interesting patches
+# (e.g. cloudy patches) using the list provided by BigEarthNet.  This
+# script operates on a band-by-band basis, allowing it to be
+# parallelized.  Used on AWS Batch or locally.
+
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mosaic-list', required=True, type=str)
-    parser.add_argument('--entire-list', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
-    parser.add_argument('--band', required=True, type=int)
-    parser.add_argument('--upload', required=False, type=str)
+    parser.add_argument('--mosaic-list', required=True, type=str,
+                        help='The list of interesting patches (e.g. cloudy patches)')
+    parser.add_argument('--entire-list', required=True,
+                        type=str, help='The list of all patches')
+    parser.add_argument('--output', required=True, type=str,
+                        help='The name of the output mosaic tif')
+    parser.add_argument('--band', required=True, type=int,
+                        help='The Sentinel-2 band to generate a mosaic of')
+    parser.add_argument('--upload', required=False, type=str,
+                        help='The S3 location of the output mosaic tif')
     return parser
 
 

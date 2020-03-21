@@ -30,11 +30,16 @@ import argparse
 import json
 import copy
 
+# A script to split a collection of AOIs in one file into multiple files.
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, required=True)
-    parser.add_argument('--name-property', type=str, required=True)
-    parser.add_argument('--output-stem', type=str, required=True)
+    parser.add_argument('--input', type=str, required=True,
+                        help='Input AOIs in geojson format')
+    parser.add_argument('--name-property', type=str, required=True,
+                        help='The property used to name output files')
+    parser.add_argument('--output-stem', type=str, required=True,
+                        help='The pattern used to generate output file names')
     args = parser.parse_args()
 
     with open(args.input, 'r') as f:

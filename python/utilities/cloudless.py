@@ -37,6 +37,8 @@ import rasterio.enums
 import rasterio.transform
 import rasterio.warp
 
+# Use s2cloudless to generate a cloud mask.  Used locally.
+
 try:
     from s2cloudless import S2PixelCloudDetector
 except:
@@ -48,8 +50,8 @@ except:
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--input', required=True, type=str, help='The input imagery tif')
+    parser.add_argument('--output', required=True, type=str, help='The output cloud mask tif')
     return parser
 
 

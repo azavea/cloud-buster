@@ -40,12 +40,16 @@ import rasterio.enums
 import rasterio.transform
 import rasterio.windows
 
+# A script to generate a shuffled (sub-)list of uninteresting
+# (e.g. non-cloudy) patches that is of the same format as the cloudy
+# patch list.  The output from this script is used as input to the
+# bigearthnet_mosaic script.  Used locally.
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cloud-list', required=True, type=str)
-    parser.add_argument('--entire-list', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
+    parser.add_argument('--cloud-list', required=True, type=str, help='The list of interesting (e.g. cloudy) patches')
+    parser.add_argument('--entire-list', required=True, type=str, help='The list of all patches')
+    parser.add_argument('--output', required=True, type=str, help='The shuffled output list')
     return parser
 
 
