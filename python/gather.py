@@ -253,12 +253,12 @@ if __name__ == '__main__':
                 for yoffset in range(0, height, model_window_size):
                     if yoffset + model_window_size > height:
                         yoffset = height - model_window_size - 1
-                    window = data[0:13, xoffset:(xoffset+model_window_size), yoffset:(
-                        yoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
+                    window = data[0:13, yoffset:(yoffset+model_window_size), xoffset:(
+                        xoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('2seg').numpy()
-                    tmp[0, xoffset:(xoffset+model_window_size),
-                        yoffset:(yoffset+model_window_size)] = out
+                    tmp[0, yoffset:(yoffset+model_window_size),
+                        xoffset:(xoffset+model_window_size)] = out
 
         tmp = (tmp > 0.0).astype(np.uint16)
         cloud_mask = cloud_mask + tmp
