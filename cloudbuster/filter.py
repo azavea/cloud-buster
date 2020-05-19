@@ -26,8 +26,6 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import argparse
-import ast
 import copy
 import json
 import os
@@ -38,47 +36,33 @@ import shapely.geometry  # type: ignore
 import shapely.ops  # type: ignore
 
 
-def cli_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--backstop', required=False,
-                        default=True, type=ast.literal_eval)
-    parser.add_argument('--coverage-count',
-                        required=False, default=3, type=int)
-    parser.add_argument('--max-selections', required=False, type=int)
-    parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
-    parser.add_argument('--date-regexp', required=False, type=str)
-    parser.add_argument('--name-regexp', required=False, type=str)
-    parser.add_argument('--minclouds', default=0.0, type=float)
-    parser.add_argument('--max-uncovered', default=5e-4, type=float)
-    return parser
-
-
-if __name__ == '__main__':
-    args = cli_parser().parse_args()
-
-    with open(args.input, 'r') as f:
-        response = json.load(f)
-
-    results = response.get('results')
+def filter_response(raw_response,
+           backstop=True,
+           coverage_count=3,
+           max_selections=None,
+           date_regexp=None,
+           name_regexp=None,
+           minclouds=0.0,
+           max_uncovered=5e-4):
+    results = raw_response.get('results')
     results = list(filter(lambda s: float(
-        s['sceneMetadata']['cloudyPixelPercentage']) >= args.minclouds, results))
+        s['sceneMetadata']['cloudyPixelPercentage']) >= minclouds, results))
 
-    if args.name_regexp:
+    if name_regexp:
         results = list(filter(lambda r: re.search(
-            args.name_regexp, r.get('name')) is not None, results))
+            name_regexp, r.get('name')) is not None, results))
 
-    if args.date_regexp:
+    if date_regexp:
         results = list(filter(lambda r: re.search(
-            args.date_regexp, r.get('createdAt')) is not None, results))
+            date_regexp, r.get('createdAt')) is not None, results))
 
     for result in results:
         result['dataShape'] = shapely.geometry.shape(
             result.get('dataFootprint'))
 
-    shape = shapely.geometry.shape(response.get('aoi'))
+    shape = shapely.geometry.shape(raw_response.get('aoi'))
     shapes = []
-    for i in range(args.coverage_count):
+    for i in range(coverage_count):
         shapes.append(copy.copy(shape))
     backstop = copy.copy(shape)
 
@@ -87,15 +71,15 @@ if __name__ == '__main__':
     def not_backstopped():
         area = backstop.area
         print(area)
-        return area > args.max_uncovered
+        return area > max_uncovered
 
     def not_covered():
         areas = list(map(lambda s: s.area, shapes))
         print(areas)
-        return sum(areas) > args.max_uncovered
+        return sum(areas) > max_uncovered
 
     def enough_selected():
-        return (args.max_selections is not None) and (len(selections) > args.max_selections)
+        return (max_selections is not None) and (len(selections) > max_selections)
 
     # Primary coverage
     while (not_covered()) and (not enough_selected()) and (len(results) > 0):
@@ -122,7 +106,7 @@ if __name__ == '__main__':
         results = results[0:i_best] + results[i_best+1:]
 
     # Backstop
-    while (not_backstopped() and args.backstop) and (not enough_selected()) and (len(results) > 0):
+    while (not_backstopped() and backstop) and (not enough_selected()) and (len(results) > 0):
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
@@ -150,14 +134,9 @@ if __name__ == '__main__':
     }
 
     # Render results
-    if (not args.backstop or not not_backstopped()) and (not not_covered()):
-        with open(args.output, 'w') as f:
-            json.dump(selections, f, sort_keys=True,
-                      indent=4, separators=(',', ': '))
+    if (not backstop or not not_backstopped()) and (not not_covered()):
+        return selections, True
     else:
-        print('ERROR: not covered')
-        with open(args.output + '.ERROR', 'w') as f:
-            if args.coverage_count == 0:
-                selections['selections'] = selections['selections'][0:1]
-            json.dump(selections, f, sort_keys=True,
-                      indent=4, separators=(',', ': '))
+        if coverage_count == 0:
+            selections['selections'] = selections['selections'][0:1]
+        return selections, False
