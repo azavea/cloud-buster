@@ -27,19 +27,12 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
-import ast
-import json
-import os
 
+import cloudbuster
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dryrun', required=False,
-                        default=False, type=ast.literal_eval)
     parser.add_argument('--input-path', required=True, type=str)
-    parser.add_argument('--jobdef', required=True, type=str)
-    parser.add_argument('--jobqueue', required=True, type=str)
-    parser.add_argument('--merge', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
     return parser
@@ -47,20 +40,4 @@ def cli_parser() -> argparse.ArgumentParser:
 
 if __name__ == '__main__':
     args = cli_parser().parse_args()
-
-    jobname = '{}-MERGE'.format(args.name)
-    submission = ''.join([
-        'aws batch submit-job ',
-        '--job-name {} '.format(jobname),
-        '--job-queue {} '.format(args.jobqueue),
-        '--job-definition {} '.format(args.jobdef),
-        '--container-overrides vcpus=8,memory=15000,',
-        'command=./download_run.sh,{},'.format(args.merge),
-        '--input-path,{},'.format(args.input_path),
-        '--name,{},'.format(args.name),
-        '--output-path,{}'.format(args.output_path)
-    ])
-    if args.dryrun:
-        print(submission)
-    else:
-        os.system(submission)
+    cloudbuster.merge(args.input_path, args.name, args.output_path)
