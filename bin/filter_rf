@@ -27,6 +27,8 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
+import json
 
 import cloudbuster
 
@@ -54,7 +56,7 @@ if __name__ == '__main__':
     with open(input_path, 'r') as f:
         raw_response = json.load(f)
 
-    selections, success = cloudbuster.filter_rf(raw_response, output_path, **args)
+    selections, success = cloudbuster.filter_response(raw_response, **args)
 
     if success:
         with open(output_path, 'w') as f:

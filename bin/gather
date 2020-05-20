@@ -41,6 +41,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--index', required=True, type=int)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
+    parser.add_argument('--working-dir', required=False, type=str)
     parser.add_argument('--sentinel-path', required=True, type=str)
     parser.add_argument('--architecture', required=False, type=str)
     parser.add_argument('--weights', required=False, type=str)

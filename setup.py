@@ -8,5 +8,5 @@ setup(name='cloudbuster',
       author_email='[email protected]',
       license='MIT',
       packages=['cloudbuster'],
-      scripts=['bin/query_rf', 'bin/filter', 'bin/meta-gather'],
+      scripts=['bin/query_rf', 'bin/filter_rf', 'bin/gather', 'bin/meta-gather', 'bin/merge', 'bin/meta-merge'],
       zip_safe=False)

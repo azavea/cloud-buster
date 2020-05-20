@@ -83,7 +83,7 @@ def gather(sentinel_path,
            s2cloudless=False):
     codes = []
 
-    def local(filename):
+    def locate(filename):
         return os.path.join(working_dir, filename)
 
     # Download data
@@ -96,7 +96,7 @@ def gather(sentinel_path,
         os.system(command)
 
     # Determine resolution, size, and filename
-    info = json.loads(os.popen('gdalinfo -json -proj4 {}'.format(local('B04.jp2'))).read())
+    info = json.loads(os.popen('gdalinfo -json -proj4 {}'.format(locate('B04.jp2'))).read())
     [width, height] = info.get('size')
     [urx, ury] = info.get('cornerCoordinates').get('upperRight')
     [lrx, lry] = info.get('cornerCoordinates').get('lowerRight')
@@ -109,70 +109,70 @@ def gather(sentinel_path,
     xres = (1.0/min(y1, y2)) * (1.0/110000) * geoTransform[1]
     yres = (1.0/110000) * geoTransform[5]
     if not backstop:
-        filename = local('{}-{:02d}.tif'.format(name, index))
+        filename = locate('{}-{:02d}.tif'.format(name, index))
     else:
-        filename = local('backstop-{}-{:02d}.tif'.format(name, index))
+        filename = locate('backstop-{}-{:02d}.tif'.format(name, index))
     out_shape = (1, width, height)
 
     # Build image
     data = np.zeros((14, width, height), dtype=np.uint16)
-    with rio.open(local('B01.jp2')) as ds:
+    with rio.open(locate('B01.jp2')) as ds:
         data[0] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B02.jp2')) as ds:
+    with rio.open(locate('B02.jp2')) as ds:
         data[1] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B03.jp2')) as ds:
+    with rio.open(locate('B03.jp2')) as ds:
         data[2] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B04.jp2')) as ds:
+    with rio.open(locate('B04.jp2')) as ds:
         data[3] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
         geoTransform = copy.copy(ds.transform)
         crs = copy.copy(ds.crs)
         profile = copy.copy(ds.profile)
         profile.update(count=14, driver='GTiff', bigtiff='yes')
-    with rio.open(local('B05.jp2')) as ds:
+    with rio.open(locate('B05.jp2')) as ds:
         data[4] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B06.jp2')) as ds:
+    with rio.open(locate('B06.jp2')) as ds:
         data[5] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B07.jp2')) as ds:
+    with rio.open(locate('B07.jp2')) as ds:
         data[6] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B08.jp2')) as ds:
+    with rio.open(locate('B08.jp2')) as ds:
         data[7] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B8A.jp2')) as ds:
+    with rio.open(locate('B8A.jp2')) as ds:
         data[8] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B09.jp2')) as ds:
+    with rio.open(locate('B09.jp2')) as ds:
         data[9] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B10.jp2')) as ds:
+    with rio.open(locate('B10.jp2')) as ds:
         data[10] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B11.jp2')) as ds:
+    with rio.open(locate('B11.jp2')) as ds:
         data[11] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(local('B12.jp2')) as ds:
+    with rio.open(locate('B12.jp2')) as ds:
         data[12] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
     if delete:
-        os.system('rm -f {}'.format(local('B*.jp2')))
+        os.system('rm -f {}'.format(locate('B*.jp2')))
 
     cloud_mask = np.zeros(out_shape, dtype=np.uint16)
 
     # Get the stock cloud mask
-    if not backstop and os.path.isfile(local('CLD_20m.jp2')):
-        with rio.open(local('CLD_20m.jp2')) as ds:
+    if not backstop and os.path.isfile(locate('CLD_20m.jp2')):
+        with rio.open(locate('CLD_20m.jp2')) as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
             cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
         if delete:
-            os.system('rm -f {}'.local('CLD_20m.jp2'))
+            os.system('rm -f {}'.locate('CLD_20m.jp2'))
 
     # Get s2cloudless cloud mask
     if not backstop and s2cloudless is not False:
@@ -215,7 +215,7 @@ def gather(sentinel_path,
 
         if not delete:
             profile.update(count=1)
-            with rio.open(local('s2cloudless.tif'), 'w', **profile) as ds:
+            with rio.open(locate('s2cloudless.tif'), 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14)
 
@@ -228,12 +228,12 @@ def gather(sentinel_path,
         model_window_size = 512
         load_architecture(architecture)
         device = torch.device('cpu')
-        if not os.path.exists(local('weights.pth')):
-            os.system('aws s3 cp {} {}'.format(weights, local('weights.pth')))
+        if not os.path.exists(locate('weights.pth')):
+            os.system('aws s3 cp {} {}'.format(weights, locate('weights.pth')))
         model = make_model(13, input_stride=1, class_count=1,
                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
-            local('weights.pth'), map_location=device))
+            locate('weights.pth'), map_location=device))
         model = model.eval()
 
         with torch.no_grad():
@@ -257,7 +257,7 @@ def gather(sentinel_path,
 
         if not delete:
             profile.update(count=1)
-            with rio.open(local('inference.tif'), 'w', **profile) as ds:
+            with rio.open(locate('inference.tif'), 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14)
 
@@ -269,7 +269,7 @@ def gather(sentinel_path,
 
     if not delete:
         profile.update(count=1)
-        with rio.open(local('cloud_mask.tif'), 'w', **profile) as ds:
+        with rio.open(locate('cloud_mask.tif'), 'w', **profile) as ds:
             ds.write(cloud_mask)
         profile.update(count=14)
 
@@ -279,7 +279,7 @@ def gather(sentinel_path,
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
     data[MASK_INDEX] = data[MASK_INDEX] * index
-    with rio.open(local('scratch.tif'), 'w', **profile) as ds:
+    with rio.open(locate('scratch.tif'), 'w', **profile) as ds:
         ds.write(data)
 
     # Warp and compress to create final file
@@ -289,11 +289,11 @@ def gather(sentinel_path,
         [xmin, ymin, xmax, ymax] = bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
     command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
-        local('scratch.tif'), xres, yres, te, filename)
+        locate('scratch.tif'), xres, yres, te, filename)
     code = os.system(command)
     codes.append(code)
     if delete:
-        os.system('rm -f {}'.format(local('scratch.tif')))
+        os.system('rm -f {}'.format(locate('scratch.tif')))
 
     # Upload final file
     code = os.system('aws s3 cp {} {}'.format(filename, output_s3_uri))
