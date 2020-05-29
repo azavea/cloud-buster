@@ -172,7 +172,7 @@ def gather(sentinel_path,
             cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
         if delete:
-            os.system('rm -f {}'.locate('CLD_20m.jp2'))
+            os.system('rm -f {}'.format(locate('CLD_20m.jp2')))
 
     # Get s2cloudless cloud mask
     if not backstop and s2cloudless is not False:
