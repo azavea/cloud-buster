@@ -49,7 +49,7 @@ def merge(name,
 
     # Download
     os.system('aws s3 sync {} {}'.format(input_s3_uri, local_working_dir))
-    backstops = int(os.popen('ls {} | wc -l'.format(working('backstop*.tif')).read()))
+    backstops = int(os.popen('ls {} | wc -l'.format(working('backstop*.tif'))).read())
 
     # Produce final images
     if backstops > 0:
