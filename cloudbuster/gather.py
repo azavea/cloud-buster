@@ -26,15 +26,11 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import argparse
-import ast
 import codecs
 import copy
 import json
 import math
 import os
-import subprocess
-import sys
 from urllib.parse import urlparse
 
 import boto3
@@ -72,35 +68,16 @@ def load_architecture(uri: str) -> None:
     exec(arch_code, globals())
 
 
-def cli_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--backstop', required=True, type=ast.literal_eval)
-    parser.add_argument('--bounds', required=False, nargs='+', type=float)
-    parser.add_argument('--delete', required=False,
-                        default=True, type=ast.literal_eval)
-    parser.add_argument('--index', required=True, type=int)
-    parser.add_argument('--name', required=True, type=str)
-    parser.add_argument('--output-path', required=True, type=str)
-    parser.add_argument('--sentinel-path', required=True, type=str)
-    parser.add_argument('--architecture', required=False, type=str)
-    parser.add_argument('--weights', required=False, type=str)
-    parser.add_argument('--s2cloudless', required=False,
-                        default=False, type=ast.literal_eval)
-    return parser
-
-
-if __name__ == '__main__':
-    args = cli_parser().parse_args()
-
+def gather(sentinel_path, backstop, name, index, delete, architecture, weights, bounds, output_path):
     codes = []
 
     # Download data
     command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ /tmp --exclude="*" --include="B*.jp2" --request-payer requester'.format(
-        args.sentinel_path)
+        sentinel_path)
     os.system(command)
-    if not args.backstop:
+    if not backstop:
         command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ /tmp --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
-            args.sentinel_path)
+            sentinel_path)
         os.system(command)
 
     # Determine resolution, size, and filename
@@ -116,10 +93,10 @@ if __name__ == '__main__':
     geoTransform = info.get('geoTransform')
     xres = (1.0/min(y1, y2)) * (1.0/110000) * geoTransform[1]
     yres = (1.0/110000) * geoTransform[5]
-    if not args.backstop:
-        filename = '/tmp/{}-{:02d}.tif'.format(args.name, args.index)
+    if not backstop:
+        filename = '/tmp/{}-{:02d}.tif'.format(name, index)
     else:
-        filename = '/tmp/backstop-{}-{:02d}.tif'.format(args.name, args.index)
+        filename = '/tmp/backstop-{}-{:02d}.tif'.format(name, index)
     out_shape = (1, width, height)
 
     # Build image
@@ -167,23 +144,23 @@ if __name__ == '__main__':
     with rio.open('/tmp/B12.jp2') as ds:
         data[12] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    if args.delete:
+    if delete:
         os.system('rm -f /tmp/B*.jp2')
 
     cloud_mask = np.zeros(out_shape, dtype=np.uint16)
 
     # Get the stock cloud mask
-    if not args.backstop and os.path.isfile('/tmp/CLD_20m.jp2'):
+    if not backstop and os.path.isfile('/tmp/CLD_20m.jp2'):
         with rio.open('/tmp/CLD_20m.jp2') as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
             cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
-        if args.delete:
+        if delete:
             os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
-    if not args.backstop and args.s2cloudless is not False:
+    if not backstop and s2cloudless is not False:
         width_16 = width//16
         height_16 = height//16
 
@@ -221,7 +198,7 @@ if __name__ == '__main__':
 
         cloud_mask = cloud_mask + tmp
 
-        if not args.delete:
+        if not delete:
             profile.update(count=1)
             with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
                 ds.write(tmp)
@@ -232,12 +209,12 @@ if __name__ == '__main__':
         del small_data
 
     # Get model cloud mask
-    if not args.backstop and args.architecture is not None and args.weights is not None:
+    if not backstop and architecture is not None and weights is not None:
         model_window_size = 512
-        load_architecture(args.architecture)
+        load_architecture(architecture)
         device = torch.device('cpu')
         if not os.path.exists('/tmp/weights.pth'):
-            os.system('aws s3 cp {} /tmp/weights.pth'.format(args.weights))
+            os.system('aws s3 cp {} /tmp/weights.pth'.format(weights))
         model = make_model(13, input_stride=1, class_count=1,
                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
@@ -263,7 +240,7 @@ if __name__ == '__main__':
         tmp = (tmp > 0.0).astype(np.uint16)
         cloud_mask = cloud_mask + tmp
 
-        if not args.delete:
+        if not delete:
             profile.update(count=1)
             with rio.open('/tmp/inference.tif', 'w', **profile) as ds:
                 ds.write(tmp)
@@ -275,7 +252,7 @@ if __name__ == '__main__':
     cloud_mask[0] = scipy.ndimage.binary_dilation(
         cloud_mask[0], structure=element)
 
-    if not args.delete:
+    if not delete:
         profile.update(count=1)
         with rio.open('/tmp/cloud_mask.tif', 'w', **profile) as ds:
             ds.write(cloud_mask)
@@ -286,27 +263,65 @@ if __name__ == '__main__':
     data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
-    data[MASK_INDEX] = data[MASK_INDEX] * args.index
+    data[MASK_INDEX] = data[MASK_INDEX] * index
     with rio.open('/tmp/scratch.tif', 'w', **profile) as ds:
         ds.write(data)
 
     # Warp and compress to create final file
-    if args.bounds is None or len(args.bounds) != 4:
+    if bounds is None or len(bounds) != 4:
         te = ''
     else:
-        [xmin, ymin, xmax, ymax] = args.bounds
+        [xmin, ymin, xmax, ymax] = bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
     command = 'gdalwarp /tmp/scratch.tif -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
         xres, yres, te, filename)
     code = os.system(command)
     codes.append(code)
-    if args.delete:
+    if delete:
         os.system('rm -f /tmp/scratch.tif')
 
     # Upload final file
-    code = os.system('aws s3 cp {} {}'.format(filename, args.output_path))
+    code = os.system('aws s3 cp {} {}'.format(filename, output_path))
     codes.append(code)
 
     codes = list(map(lambda c: os.WEXITSTATUS(c) != 0, codes))
+    return codes
+
+
+if __name__ == '__main__':
+    import argparse
+    import ast
+    import sys
+
+    def cli_parser() -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--backstop', required=True, type=ast.literal_eval)
+        parser.add_argument('--bounds', required=False, nargs='+', type=float)
+        parser.add_argument('--delete', required=False,
+                            default=True, type=ast.literal_eval)
+        parser.add_argument('--index', required=True, type=int)
+        parser.add_argument('--name', required=True, type=str)
+        parser.add_argument('--output-path', required=True, type=str)
+        parser.add_argument('--sentinel-path', required=True, type=str)
+        parser.add_argument('--architecture', required=False, type=str)
+        parser.add_argument('--weights', required=False, type=str)
+        parser.add_argument('--s2cloudless', required=False,
+                            default=False, type=ast.literal_eval)
+        return parser
+
+    args = cli_parser().parse_args()
+
+    codes = gather(
+        args.sentinel_path,
+        args.backstop,
+        args.name,
+        args.index,
+        args.delete,
+        args.architecture,
+        args.weights,
+        args.bounds,
+        args.output_path
+    )
+
     if any(codes):
         sys.exit(-1)
