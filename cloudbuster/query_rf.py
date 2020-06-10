@@ -26,11 +26,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import argparse
-import ast
 import json
-import os
-from urllib.parse import urlparse
 from uuid import uuid4
 
 import requests
@@ -162,45 +158,22 @@ class RFClient:
         )
 
 
-def cli_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--aoi-name', required=False, type=str)
-    parser.add_argument('--geojson', required=True, type=str)
-    parser.add_argument('--limit', required=False, default=1024, type=int)
-    parser.add_argument('--name-property', required=False, type=str)
-    parser.add_argument('--refresh-token', required=True, type=str)
-    parser.add_argument('--response', required=False, type=str)
-    parser.add_argument('--maxclouds', required=False, default=20, type=int)
-    parser.add_argument('--mindate', required=False,
-                        nargs='+', type=str, default=['1307-10-13'])
-    parser.add_argument('--maxdate', required=False,
-                        nargs='+', type=str, default=['2038-01-19'])
-    parser.add_argument('--scale', type=float, required=False)
-    parser.add_argument('--original-shape',
-                        type=ast.literal_eval, required=False, default=False)
-    return parser
-
-
-if __name__ == '__main__':
-    args = cli_parser().parse_args()
-
-    with open(args.geojson, 'r') as f:
-        features = json.load(f)
+def query_rf(features, scale, aoi_name, original_shape, name_property, refresh_token, mindate, maxdate, maxclouds, limit):
 
     def convert_and_scale(f):
         tmp = shapely.geometry.shape(f.get('geometry'))
-        if args.scale is not None:
-            tmp = shapely.affinity.scale(tmp, args.scale, args.scale)
+        if scale is not None:
+            tmp = shapely.affinity.scale(tmp, scale, scale)
         return tmp
 
     feature = list(map(convert_and_scale, features.get('features')))
     shape = shapely.ops.cascaded_union(feature)
 
-    if args.aoi_name is None and args.name_property is not None:
-        args.aoi_name = feature.get('properties').get(args.name_property)
+    if aoi_name is None and name_property is not None:
+        aoi_name = feature.get('properties').get(name_property)
 
-    if args.original_shape:
-        args.scale = None
+    if original_shape:
+        scale = None
         original_shape = shapely.ops.cascaded_union(
             list(map(convert_and_scale, features.get('features'))))
         aoi_shape = original_shape
@@ -212,22 +185,66 @@ if __name__ == '__main__':
         'aoi': shapely.geometry.mapping(aoi_shape)
     }
 
-    rf_client = RFClient(args.refresh_token,
+    rf_client = RFClient(refresh_token,
                          'https://app.rasterfoundry.com/api')
     rf_shape = rf_client.create_shape(
         shapely.geometry.mapping(shape), str(uuid4()))
-    for (mindate, maxdate) in zip(args.mindate, args.maxdate):
+    for (mindate, maxdate) in zip(mindate, maxdate):
         geo_filter = {
             "minAcquisitionDate": mindate,
             "maxAcquisitionDate": maxdate,
-            "maxCloudCover": args.maxclouds,
+            "maxCloudCover": maxclouds,
             "overlapPercentage": 50.0,
-            "limit": args.limit
+            "limit": limit
         }
         rf_params = RFClient.rf_params_from_geo_filter(
             geo_filter, rf_shape.get('id'))
         sentinel_scenes['results'] += rf_client.list_scenes(
             rf_params).get('results')
+
+    return sentinel_scenes
+
+
+if __name__ == '__main__':
+    import argparse
+    import ast
+
+    def cli_parser() -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--aoi-name', required=False, type=str)
+        parser.add_argument('--geojson', required=True, type=str)
+        parser.add_argument('--limit', required=False, default=1024, type=int)
+        parser.add_argument('--name-property', required=False, type=str)
+        parser.add_argument('--refresh-token', required=True, type=str)
+        parser.add_argument('--response', required=False, type=str)
+        parser.add_argument('--maxclouds', required=False,
+                            default=20, type=int)
+        parser.add_argument('--mindate', required=False,
+                            nargs='+', type=str, default=['1307-10-13'])
+        parser.add_argument('--maxdate', required=False,
+                            nargs='+', type=str, default=['2038-01-19'])
+        parser.add_argument('--scale', type=float, required=False)
+        parser.add_argument('--original-shape',
+                            type=ast.literal_eval, required=False, default=False)
+        return parser
+
+    args = cli_parser().parse_args()
+
+    with open(args.geojson, 'r') as f:
+        features = json.load(f)
+
+    sentinel_scenes = query_rf(
+        features,
+        args.scale,
+        args.aoi_name,
+        args.original_shape,
+        args.name_property,
+        args.refresh_token,
+        args.mindate,
+        args.maxdate,
+        args.maxclouds,
+        args.limit
+    )
 
     if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
