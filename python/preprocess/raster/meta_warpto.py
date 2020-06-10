@@ -26,44 +26,29 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-import argparse
-import ast
-import json
 
-import cloudbuster
+import argparse
+import copy
+import os
+
 
 def cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backstop', required=False,
-                        default=True, type=ast.literal_eval)
-    parser.add_argument('--coverage-count',
-                        required=False, default=3, type=int)
-    parser.add_argument('--max-selections', required=False, type=int)
+    parser.add_argument('--metadata-file', required=True, type=str)
     parser.add_argument('--input', required=True, type=str)
-    parser.add_argument('--output', required=True, type=str)
-    parser.add_argument('--date-regexp', required=False, type=str)
-    parser.add_argument('--name-regexp', required=False, type=str)
-    parser.add_argument('--minclouds', default=0.0, type=float)
-    parser.add_argument('--max-uncovered', default=5e-4, type=float)
+    parser.add_argument('--postfix', required=False, default='labels', type=str)
     return parser
 
 
 if __name__ == '__main__':
-    args = vars(cli_parser().parse_args())
-    input_path = args.pop('input', None)
-    output_path = args.pop('output', None)
+    args = cli_parser().parse_args()
 
-    with open(input_path, 'r') as f:
-        raw_response = json.load(f)
+    output = copy.copy(args.metadata_file).replace('.tif', '-{}.tif'.format(args.postfix))
+    args.input = args.input.replace('s3://', '/vsis3/')
+    args.metadata_file = args.metadata_file.replace('s3://', '/vsis3/')
 
-    selections, success = cloudbuster.filter_response(raw_response, **args)
-
-    if success:
-        with open(output_path, 'w') as f:
-            json.dump(selections, f, sort_keys=True,
-                      indent=4, separators=(',', ': '))
-    else:
-        print('ERROR: not covered')
-        with open(output_path + '.ERROR', 'w') as f:
-            json.dump(selections, f, sort_keys=True,
-                      indent=4, separators=(',', ': '))
+    submission = 'python3 python/warpto.py --metadata-file {} --input {} --output /tmp/out.tif'.format(args.metadata_file, args.input)
+    # print(submission)
+    os.system(submission)
+    os.system('aws s3 cp /tmp/out.tif {}'.format(output))
+    os.system('rm -f /tmp/out.tif')

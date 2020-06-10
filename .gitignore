@@ -6,5 +6,3 @@ list.txt
 *.json
 *.csv
 
-__pycache__
-cloudbuster.egg-info

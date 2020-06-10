@@ -26,6 +26,8 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
+import argparse
+import ast
 import codecs
 import copy
 import json
@@ -70,33 +72,39 @@ def load_architecture(uri: str) -> None:
     exec(arch_code, globals())
 
 
-def gather(sentinel_path,
-           output_s3_uri,
-           index,
-           name,
-           backstop,
-           working_dir='/tmp',
-           bounds=None,
-           delete=True,
-           architecture=None,
-           weights=None,
-           s2cloudless=False):
+def cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--backstop', required=True, type=ast.literal_eval)
+    parser.add_argument('--bounds', required=False, nargs='+', type=float)
+    parser.add_argument('--delete', required=False,
+                        default=True, type=ast.literal_eval)
+    parser.add_argument('--index', required=True, type=int)
+    parser.add_argument('--name', required=True, type=str)
+    parser.add_argument('--output-path', required=True, type=str)
+    parser.add_argument('--sentinel-path', required=True, type=str)
+    parser.add_argument('--architecture', required=False, type=str)
+    parser.add_argument('--weights', required=False, type=str)
+    parser.add_argument('--s2cloudless', required=False,
+                        default=False, type=ast.literal_eval)
+    return parser
+
+
+if __name__ == '__main__':
+    args = cli_parser().parse_args()
+
     codes = []
 
-    def locate(filename):
-        return os.path.join(working_dir, filename)
-
     # Download data
-    command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ {} --exclude="*" --include="B*.jp2" --request-payer requester'.format(
-        sentinel_path, working_dir)
+    command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ /tmp --exclude="*" --include="B*.jp2" --request-payer requester'.format(
+        args.sentinel_path)
     os.system(command)
-    if not backstop:
-        command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ {} --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
-            sentinel_path, working_dir)
+    if not args.backstop:
+        command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ /tmp --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
+            args.sentinel_path)
         os.system(command)
 
     # Determine resolution, size, and filename
-    info = json.loads(os.popen('gdalinfo -json -proj4 {}'.format(locate('B04.jp2'))).read())
+    info = json.loads(os.popen('gdalinfo -json -proj4 /tmp/B04.jp2').read())
     [width, height] = info.get('size')
     [urx, ury] = info.get('cornerCoordinates').get('upperRight')
     [lrx, lry] = info.get('cornerCoordinates').get('lowerRight')
@@ -108,74 +116,74 @@ def gather(sentinel_path,
     geoTransform = info.get('geoTransform')
     xres = (1.0/min(y1, y2)) * (1.0/110000) * geoTransform[1]
     yres = (1.0/110000) * geoTransform[5]
-    if not backstop:
-        filename = locate('{}-{:02d}.tif'.format(name, index))
+    if not args.backstop:
+        filename = '/tmp/{}-{:02d}.tif'.format(args.name, args.index)
     else:
-        filename = locate('backstop-{}-{:02d}.tif'.format(name, index))
+        filename = '/tmp/backstop-{}-{:02d}.tif'.format(args.name, args.index)
     out_shape = (1, width, height)
 
     # Build image
     data = np.zeros((14, width, height), dtype=np.uint16)
-    with rio.open(locate('B01.jp2')) as ds:
+    with rio.open('/tmp/B01.jp2') as ds:
         data[0] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B02.jp2')) as ds:
+    with rio.open('/tmp/B02.jp2') as ds:
         data[1] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B03.jp2')) as ds:
+    with rio.open('/tmp/B03.jp2') as ds:
         data[2] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B04.jp2')) as ds:
+    with rio.open('/tmp/B04.jp2') as ds:
         data[3] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
         geoTransform = copy.copy(ds.transform)
         crs = copy.copy(ds.crs)
         profile = copy.copy(ds.profile)
         profile.update(count=14, driver='GTiff', bigtiff='yes')
-    with rio.open(locate('B05.jp2')) as ds:
+    with rio.open('/tmp/B05.jp2') as ds:
         data[4] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B06.jp2')) as ds:
+    with rio.open('/tmp/B06.jp2') as ds:
         data[5] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B07.jp2')) as ds:
+    with rio.open('/tmp/B07.jp2') as ds:
         data[6] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B08.jp2')) as ds:
+    with rio.open('/tmp/B08.jp2') as ds:
         data[7] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B8A.jp2')) as ds:
+    with rio.open('/tmp/B8A.jp2') as ds:
         data[8] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B09.jp2')) as ds:
+    with rio.open('/tmp/B09.jp2') as ds:
         data[9] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B10.jp2')) as ds:
+    with rio.open('/tmp/B10.jp2') as ds:
         data[10] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B11.jp2')) as ds:
+    with rio.open('/tmp/B11.jp2') as ds:
         data[11] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B12.jp2')) as ds:
+    with rio.open('/tmp/B12.jp2') as ds:
         data[12] = ds.read(out_shape=out_shape,
                            resampling=rasterio.enums.Resampling.nearest)[0]
-    if delete:
-        os.system('rm -f {}'.format(locate('B*.jp2')))
+    if args.delete:
+        os.system('rm -f /tmp/B*.jp2')
 
     cloud_mask = np.zeros(out_shape, dtype=np.uint16)
 
     # Get the stock cloud mask
-    if not backstop and os.path.isfile(locate('CLD_20m.jp2')):
-        with rio.open(locate('CLD_20m.jp2')) as ds:
+    if not args.backstop and os.path.isfile('/tmp/CLD_20m.jp2'):
+        with rio.open('/tmp/CLD_20m.jp2') as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
             cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
-        if delete:
-            os.system('rm -f {}'.format(locate('CLD_20m.jp2')))
+        if args.delete:
+            os.system('rm -f /tmp/CLD_20m.jp2')
 
     # Get s2cloudless cloud mask
-    if not backstop and s2cloudless is not False:
+    if not args.backstop and args.s2cloudless is not False:
         width_16 = width//16
         height_16 = height//16
 
@@ -213,9 +221,9 @@ def gather(sentinel_path,
 
         cloud_mask = cloud_mask + tmp
 
-        if not delete:
+        if not args.delete:
             profile.update(count=1)
-            with rio.open(locate('s2cloudless.tif'), 'w', **profile) as ds:
+            with rio.open('/tmp/s2cloudless.tif', 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14)
 
@@ -224,16 +232,16 @@ def gather(sentinel_path,
         del small_data
 
     # Get model cloud mask
-    if not backstop and architecture is not None and weights is not None:
+    if not args.backstop and args.architecture is not None and args.weights is not None:
         model_window_size = 512
-        load_architecture(architecture)
+        load_architecture(args.architecture)
         device = torch.device('cpu')
-        if not os.path.exists(locate('weights.pth')):
-            os.system('aws s3 cp {} {}'.format(weights, locate('weights.pth')))
+        if not os.path.exists('/tmp/weights.pth'):
+            os.system('aws s3 cp {} /tmp/weights.pth'.format(args.weights))
         model = make_model(13, input_stride=1, class_count=1,
                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
-            locate('weights.pth'), map_location=device))
+            '/tmp/weights.pth', map_location=device))
         model = model.eval()
 
         with torch.no_grad():
@@ -255,9 +263,9 @@ def gather(sentinel_path,
         tmp = (tmp > 0.0).astype(np.uint16)
         cloud_mask = cloud_mask + tmp
 
-        if not delete:
+        if not args.delete:
             profile.update(count=1)
-            with rio.open(locate('inference.tif'), 'w', **profile) as ds:
+            with rio.open('/tmp/inference.tif', 'w', **profile) as ds:
                 ds.write(tmp)
             profile.update(count=14)
 
@@ -267,9 +275,9 @@ def gather(sentinel_path,
     cloud_mask[0] = scipy.ndimage.binary_dilation(
         cloud_mask[0], structure=element)
 
-    if not delete:
+    if not args.delete:
         profile.update(count=1)
-        with rio.open(locate('cloud_mask.tif'), 'w', **profile) as ds:
+        with rio.open('/tmp/cloud_mask.tif', 'w', **profile) as ds:
             ds.write(cloud_mask)
         profile.update(count=14)
 
@@ -278,25 +286,25 @@ def gather(sentinel_path,
     data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
-    data[MASK_INDEX] = data[MASK_INDEX] * index
-    with rio.open(locate('scratch.tif'), 'w', **profile) as ds:
+    data[MASK_INDEX] = data[MASK_INDEX] * args.index
+    with rio.open('/tmp/scratch.tif', 'w', **profile) as ds:
         ds.write(data)
 
     # Warp and compress to create final file
-    if bounds is None or len(bounds) != 4:
+    if args.bounds is None or len(args.bounds) != 4:
         te = ''
     else:
-        [xmin, ymin, xmax, ymax] = bounds
+        [xmin, ymin, xmax, ymax] = args.bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
-    command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
-        locate('scratch.tif'), xres, yres, te, filename)
+    command = 'gdalwarp /tmp/scratch.tif -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
+        xres, yres, te, filename)
     code = os.system(command)
     codes.append(code)
-    if delete:
-        os.system('rm -f {}'.format(locate('scratch.tif')))
+    if args.delete:
+        os.system('rm -f /tmp/scratch.tif')
 
     # Upload final file
-    code = os.system('aws s3 cp {} {}'.format(filename, output_s3_uri))
+    code = os.system('aws s3 cp {} {}'.format(filename, args.output_path))
     codes.append(code)
 
     codes = list(map(lambda c: os.WEXITSTATUS(c) != 0, codes))

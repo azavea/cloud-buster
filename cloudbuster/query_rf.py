@@ -162,28 +162,45 @@ class RFClient:
         )
 
 
-def query_rf(geojson,
-             refresh_token,
-             limit=1024,
-             maxclouds=20,
-             mindate=['1307-10-13'],
-             maxdate=['2038-01-19'],
-             scale=None,
-             original_shape=False):
-    with open(geojson, 'r') as f:
+def cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--aoi-name', required=False, type=str)
+    parser.add_argument('--geojson', required=True, type=str)
+    parser.add_argument('--limit', required=False, default=1024, type=int)
+    parser.add_argument('--name-property', required=False, type=str)
+    parser.add_argument('--refresh-token', required=True, type=str)
+    parser.add_argument('--response', required=False, type=str)
+    parser.add_argument('--maxclouds', required=False, default=20, type=int)
+    parser.add_argument('--mindate', required=False,
+                        nargs='+', type=str, default=['1307-10-13'])
+    parser.add_argument('--maxdate', required=False,
+                        nargs='+', type=str, default=['2038-01-19'])
+    parser.add_argument('--scale', type=float, required=False)
+    parser.add_argument('--original-shape',
+                        type=ast.literal_eval, required=False, default=False)
+    return parser
+
+
+if __name__ == '__main__':
+    args = cli_parser().parse_args()
+
+    with open(args.geojson, 'r') as f:
         features = json.load(f)
 
     def convert_and_scale(f):
         tmp = shapely.geometry.shape(f.get('geometry'))
-        if scale is not None:
-            tmp = shapely.affinity.scale(tmp, scale, scale)
+        if args.scale is not None:
+            tmp = shapely.affinity.scale(tmp, args.scale, args.scale)
         return tmp
 
     feature = list(map(convert_and_scale, features.get('features')))
     shape = shapely.ops.cascaded_union(feature)
 
-    if original_shape:
-        scale = None
+    if args.aoi_name is None and args.name_property is not None:
+        args.aoi_name = feature.get('properties').get(args.name_property)
+
+    if args.original_shape:
+        args.scale = None
         original_shape = shapely.ops.cascaded_union(
             list(map(convert_and_scale, features.get('features'))))
         aoi_shape = original_shape
@@ -195,21 +212,27 @@ def query_rf(geojson,
         'aoi': shapely.geometry.mapping(aoi_shape)
     }
 
-    rf_client = RFClient(refresh_token,
+    rf_client = RFClient(args.refresh_token,
                          'https://app.rasterfoundry.com/api')
     rf_shape = rf_client.create_shape(
         shapely.geometry.mapping(shape), str(uuid4()))
-    for (mindate, maxdate) in zip(mindate, maxdate):
+    for (mindate, maxdate) in zip(args.mindate, args.maxdate):
         geo_filter = {
             "minAcquisitionDate": mindate,
             "maxAcquisitionDate": maxdate,
-            "maxCloudCover": maxclouds,
+            "maxCloudCover": args.maxclouds,
             "overlapPercentage": 50.0,
-            "limit": limit
+            "limit": args.limit
         }
         rf_params = RFClient.rf_params_from_geo_filter(
             geo_filter, rf_shape.get('id'))
         sentinel_scenes['results'] += rf_client.list_scenes(
             rf_params).get('results')
 
-    return sentinel_scenes
+    if args.response is None and args.aoi_name is not None:
+        args.response = './{}.json'.format(args.aoi_name)
+    if args.response is not None:
+        with open(args.response, 'w') as f:
+            json.dump(sentinel_scenes, f, sort_keys=True,
+                      indent=4, separators=(',', ': '))
+        print(args.response)
