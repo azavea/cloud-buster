@@ -249,6 +249,10 @@ if __name__ == '__main__':
     )
 
     if args.aoi_name is None and args.name_property is not None:
+        if 'properties' in features:
+            feature = features
+        else:
+            feature = features.get('features')[0]
         args.aoi_name = feature.get('properties').get(args.name_property)
 
     if args.response is None and args.aoi_name is not None:
