@@ -86,7 +86,7 @@ def gather(sentinel_path,
 
     # Download data
     command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ {} --exclude="*" --include="B*.jp2" --request-payer requester'.format(
-        sentinel_path, working dir)
+        sentinel_path, working_dir)
     os.system(command)
     if not backstop:
         command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ {} --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
