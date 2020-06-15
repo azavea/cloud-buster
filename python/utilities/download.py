@@ -27,6 +27,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import copy
 import json
 import os
@@ -44,6 +45,8 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--images', required=True, type=int)
     parser.add_argument('--output-dir', required=True, type=str)
     parser.add_argument('--refresh-token', required=True, type=str)
+    parser.add_argument('--l2a', required=False,
+                        default=False, type=ast.literal_eval)
     return parser
 
 
@@ -72,6 +75,7 @@ if __name__ == '__main__':
         '--max-selections {} '.format(args.images),
         '--input /tmp/raw.json ',
         '--output /tmp/filtered.json ',
+        '--max-uncovered 1e-8 ',
         '> /dev/null'
     ])
 
@@ -84,19 +88,55 @@ if __name__ == '__main__':
 
     os.system('mkdir -p {}'.format(args.output_dir))
 
+    if args.l2a:
+        sentinel_bucket = 'sentinel-s2-l2a'
+        sentinel_10m = 'R10m/'
+        sentinel_20m = 'R20m/'
+        sentinel_60m = 'R60m/'
+    else:
+        sentinel_bucket = 'sentinel-s2-l1c'
+        sentinel_10m = sentinel_20m = sentinel_60m = ''
+
     i = 0
     for (selection, index) in zip(data['selections'], range(0, len(data))):
         selection['index'] = index
 
+        print('10m')
         command = ''.join([
             'aws s3 sync ',
-            's3://sentinel-s2-l1c/{}/ '.format(
-                selection.get('sceneMetadata').get('path')),
+            's3://{}/{}/{} '.format(sentinel_bucket,
+                                    selection.get('sceneMetadata').get('path'),
+                                    sentinel_10m),
             '/tmp/ ',
-            '--exclude="*" --include="B*.jp2" ',
+            '--exclude="*" --include="B0[2348].jp2" ',
             '--request-payer requester'
         ])
+        if os.WEXITSTATUS(os.system(command)) != 0:
+            raise Exception()
 
+        print('20m')
+        command = ''.join([
+            'aws s3 sync ',
+            's3://{}/{}/{} '.format(sentinel_bucket,
+                                    selection.get('sceneMetadata').get('path'),
+                                    sentinel_20m),
+            '/tmp/ ',
+            '--exclude="*" --include="B0[567].jp2" --include="B8A.jp2" --include="B1[12].jp2" ',
+            '--request-payer requester'
+        ])
+        if os.WEXITSTATUS(os.system(command)) != 0:
+            raise Exception()
+
+        print('60m')
+        command = ''.join([
+            'aws s3 sync ',
+            's3://{}/{}/{} '.format(sentinel_bucket,
+                                    selection.get('sceneMetadata').get('path'),
+                                    sentinel_60m),
+            '/tmp/ ',
+            '--exclude="*" --include="B0[19].jp2" --include="B10.jp2" ',
+            '--request-payer requester'
+        ])
         if os.WEXITSTATUS(os.system(command)) != 0:
             raise Exception()
 
@@ -104,18 +144,30 @@ if __name__ == '__main__':
             profile = copy.copy(ds.profile)
             width = ds.width
             height = ds.height
-        profile.update(count=13, compress='deflate',
-                       bigtiff='yes', driver='GTiff')
+        if args.l2a:
+            profile.update(count=12, compress='deflate',
+                           bigtiff='yes', driver='GTiff')
+            bands = np.zeros((12, width, height), dtype=np.uint16)
+        else:
+            profile.update(count=13, compress='deflate',
+                           bigtiff='yes', driver='GTiff')
+            bands = np.zeros((13, width, height), dtype=np.uint16)
 
-        bands = np.zeros((13, width, height), dtype=np.uint16)
-
-        filenames = ['B01.jp2', 'B02.jp2',
-                     'B03.jp2', 'B04.jp2',
-                     'B05.jp2', 'B06.jp2',
-                     'B07.jp2', 'B08.jp2',
-                     'B8A.jp2', 'B09.jp2',
-                     'B10.jp2', 'B11.jp2',
-                     'B12.jp2']
+        if args.l2a:
+            filenames = ['B01.jp2', 'B02.jp2',
+                         'B03.jp2', 'B04.jp2',
+                         'B05.jp2', 'B06.jp2',
+                         'B07.jp2', 'B08.jp2',
+                         'B8A.jp2', 'B09.jp2',
+                         'B11.jp2', 'B12.jp2']
+        else:
+            filenames = ['B01.jp2', 'B02.jp2',
+                         'B03.jp2', 'B04.jp2',
+                         'B05.jp2', 'B06.jp2',
+                         'B07.jp2', 'B08.jp2',
+                         'B8A.jp2', 'B09.jp2',
+                         'B10.jp2', 'B11.jp2',
+                         'B12.jp2']
 
         print('reading')
         for (filename, band) in zip(filenames, range(0, len(bands))):
