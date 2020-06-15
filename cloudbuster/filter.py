@@ -161,13 +161,13 @@ if __name__ == '__main__':
 
     selections, not_backstopped, not_covered = filter_response(
         response,
-        args.name_regexp,
-        args.date_regexp,
-        args.minclouds,
-        args.max_uncovered,
-        args.max_selections,
-        args.coverage_count,
-        args.backstop
+        name_regexp=args.name_regexp,
+        date_regexp=args.date_regexp,
+        minclouds=args.minclouds,
+        max_uncovered=args.max_uncovered,
+        max_selections=args.max_selections,
+        coverage_count=args.coverage_count,
+        backstop=args.backstop
     )
 
     # Render results
