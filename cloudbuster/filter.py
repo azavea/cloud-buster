@@ -34,7 +34,14 @@ import shapely.geometry  # type: ignore
 import shapely.ops  # type: ignore
 
 
-def filter_response(response, name_regexp, date_regexp, minclouds, max_uncovered, max_selections, coverage_count, backstop):
+def filter_response(response,
+                    backstop=True,
+                    coverage_count=3,
+                    max_selections=None,
+                    date_regexp=None,
+                    name_regexp=None,
+                    minclouds=0.0,
+                    max_uncovered=5e-4):
     results = response.get('results')
     results = list(filter(lambda s: float(
         s['sceneMetadata']['cloudyPixelPercentage']) >= minclouds, results))

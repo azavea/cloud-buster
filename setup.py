@@ -8,4 +8,5 @@ setup(name='cloudbuster',
       author_email='[email protected]',
       license='MIT',
       packages=['cloudbuster'],
+      scripts=['cloudbuster/query_rf.py', 'cloudbuster/filter.py', 'cloudbuster/gather.py', 'cloudbuster/merge.py', 'python/meta-gather.py', 'python/meta-merge.py'],
       zip_safe=False)

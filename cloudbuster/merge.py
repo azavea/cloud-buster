@@ -37,30 +37,36 @@ import rasterio as rio
 import scipy.ndimage
 
 
-def merge(name, input_path, output_path):
-    cloudless_tif = '/tmp/{}-cloudless.tif'.format(name)
-    cloudy_tif = '/tmp/{}-cloudy.tif'.format(name)
+def merge(name,
+          input_s3_uri,
+          output_s3_uri,
+          local_working_dir='/tmp'):
+    def working(filename):
+        return os.path.join(local_working_dir, filename)
+
+    cloudless_tif = working('{}-cloudless.tif'.format(name))
+    cloudy_tif = working('{}-cloudy.tif'.format(name))
 
     # Download
-    os.system('aws s3 sync {} /tmp/'.format(input_path))
-    backstops = int(os.popen('ls /tmp/backstop*.tif | wc -l').read())
+    os.system('aws s3 sync {} {}'.format(input_s3_uri, local_working_dir))
+    backstops = int(os.popen('ls {} | wc -l'.format(working('backstop*.tif'))).read())
 
     # Produce final images
     if backstops > 0:
-        os.system('gdalwarp $(ls /tmp/*.tif | grep backstop | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES /tmp/cloudy.tif')
-        os.system('gdalwarp /tmp/cloudy.tif -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudy_tif))
-        os.system('rm /tmp/cloudy.tif')
-        os.system('aws s3 cp {} {}'.format(cloudy_tif, output_path))
-        os.system('gdalwarp {} $(ls /tmp/*.tif | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES /tmp/cloudless.tif'.format(cloudy_tif))
-        os.system('gdalwarp /tmp/cloudless.tif -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudless_tif))
-        os.system('rm /tmp/cloudless.tif')
+        os.system('gdalwarp $(ls {} | grep backstop | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES {}'.format(working('*.tif'), working('cloudy.tif')))
+        os.system('gdalwarp {} -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(working('cloudy.tif'), cloudy_tif))
+        os.system('rm {}'.format(working('cloudy.tif')))
+        os.system('aws s3 cp {} {}'.format(cloudy_tif, output_s3_uri))
+        os.system('gdalwarp {} $(ls {} | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES {}'.format(cloudy_tif, working('*.tif'), working('cloudless.tif')))
+        os.system('gdalwarp {} -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(working('cloudless.tif'), cloudless_tif))
+        os.system('rm {}'.format(working('cloudless.tif')))
     else:
-        os.system('gdalwarp $(ls /tmp/*.tif | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES /tmp/cloudless.tif')
-        os.system('gdalwarp /tmp/cloudless.tif -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(cloudless_tif))
-        os.system('rm /tmp/cloudless.tif')
+        os.system('gdalwarp $(ls {} | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES {}'.format(working('*.tif'), working('cloudless.tif')))
+        os.system('gdalwarp {} -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(working('cloudless.tif'), cloudless_tif))
+        os.system('rm {}'.format(working('cloudless.tif')))
 
     # Upload
-    os.system('aws s3 cp {} {}'.format(cloudless_tif, output_path))
+    os.system('aws s3 cp {} {}'.format(cloudless_tif, output_s3_uri))
 
 
 if __name__ == '__main__':

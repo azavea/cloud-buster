@@ -158,7 +158,14 @@ class RFClient:
         )
 
 
-def query_rf(features, scale, aoi_name, original_shape, name_property, refresh_token, mindate, maxdate, maxclouds, limit):
+def query_rf(features,
+             refresh_token,
+             limit=1024,
+             maxclouds=20,
+             mindate=['1307-10-13'],
+             maxdate=['2038-01-19'],
+             scale=None,
+             original_shape=False):
 
     def convert_and_scale(f):
         tmp = shapely.geometry.shape(f.get('geometry'))
@@ -168,9 +175,6 @@ def query_rf(features, scale, aoi_name, original_shape, name_property, refresh_t
 
     feature = list(map(convert_and_scale, features.get('features')))
     shape = shapely.ops.cascaded_union(feature)
-
-    if aoi_name is None and name_property is not None:
-        aoi_name = feature.get('properties').get(name_property)
 
     if original_shape:
         scale = None
@@ -235,19 +239,21 @@ if __name__ == '__main__':
 
     sentinel_scenes = query_rf(
         features,
-        args.scale,
-        args.aoi_name,
-        args.original_shape,
-        args.name_property,
         args.refresh_token,
+        args.limit,
+        args.maxclouds,
         args.mindate,
         args.maxdate,
-        args.maxclouds,
-        args.limit
+        args.scale,
+        args.original_shape
     )
+
+    if args.aoi_name is None and args.name_property is not None:
+        args.aoi_name = feature.get('properties').get(args.name_property)
 
     if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
+
     if args.response is not None:
         with open(args.response, 'w') as f:
             json.dump(sentinel_scenes, f, sort_keys=True,
