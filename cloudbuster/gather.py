@@ -78,23 +78,61 @@ def gather(sentinel_path,
            delete=True,
            architecture=None,
            weights=None,
-           s2cloudless=False):
+           s2cloudless=False,
+           l2a=False):
     codes = []
 
     def locate(filename):
         return os.path.join(working_dir, filename)
 
+    # s2cloudless only operates on l1c imagery
+    s2cloudless = s2cloudless and not l2a
+
     # Download data
-    command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ {} --exclude="*" --include="B*.jp2" --request-payer requester'.format(
-        sentinel_path, working_dir)
+    if l2a:
+        sentinel_bucket = 'sentinel-s2-l2a'
+        sentinel_10m = 'R10m/'
+        sentinel_20m = 'R20m/'
+        sentinel_60m = 'R60m/'
+    else:
+        sentinel_bucket = 'sentinel-s2-l1c'
+        sentinel_10m = sentinel_20m = sentinel_60m = ''
+
+    # 10m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket, sentinel_path, sentinel_10m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[2348].jp2" ',
+        '--request-payer requester'
+    ])
     os.system(command)
+
+    # 20m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket, sentinel_path, sentinel_20m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[567].jp2" --include="B8A.jp2" --include="B1[12].jp2" ',
+        '--request-payer requester'
+    ])
+    os.system(command)
+
+    # 60m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket, sentinel_path, sentinel_60m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[19].jp2" --include="B10.jp2" ',
+        '--request-payer requester'
+    ])
+    os.system(command)
+
     if not backstop:
         command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ {} --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
             sentinel_path, working_dir)
         os.system(command)
 
     # Determine resolution, size, and filename
-    info = json.loads(os.popen('gdalinfo -json -proj4 {}'.format(locate('B04.jp2'))).read())
+    info = json.loads(
+        os.popen('gdalinfo -json -proj4 {}'.format(locate('B04.jp2'))).read())
     [width, height] = info.get('size')
     [urx, ury] = info.get('cornerCoordinates').get('upperRight')
     [lrx, lry] = info.get('cornerCoordinates').get('lowerRight')
@@ -113,7 +151,11 @@ def gather(sentinel_path,
     out_shape = (1, width, height)
 
     # Build image
-    data = np.zeros((14, width, height), dtype=np.uint16)
+    if l2a:
+        data = np.zeros((13, width, height), dtype=np.uint16)
+    else:
+        data = np.zeros((14, width, height), dtype=np.uint16)
+
     with rio.open(locate('B01.jp2')) as ds:
         data[0] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
@@ -129,7 +171,10 @@ def gather(sentinel_path,
         geoTransform = copy.copy(ds.transform)
         crs = copy.copy(ds.crs)
         profile = copy.copy(ds.profile)
-        profile.update(count=14, driver='GTiff', bigtiff='yes')
+        if l2a:
+            profile.update(count=13, driver='GTiff', bigtiff='yes')
+        else:
+            profile.update(count=14, driver='GTiff', bigtiff='yes')
     with rio.open(locate('B05.jp2')) as ds:
         data[4] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
@@ -148,15 +193,23 @@ def gather(sentinel_path,
     with rio.open(locate('B09.jp2')) as ds:
         data[9] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B10.jp2')) as ds:
-        data[10] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B11.jp2')) as ds:
-        data[11] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B12.jp2')) as ds:
-        data[12] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
+    if l2a:
+        with rio.open(locate('B11.jp2')) as ds:
+            data[10] = ds.read(out_shape=out_shape,
+                            resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(locate('B12.jp2')) as ds:
+            data[11] = ds.read(out_shape=out_shape,
+                            resampling=rasterio.enums.Resampling.nearest)[0]
+    else:
+        with rio.open(locate('B10.jp2')) as ds:
+            data[10] = ds.read(out_shape=out_shape,
+                            resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(locate('B11.jp2')) as ds:
+            data[11] = ds.read(out_shape=out_shape,
+                            resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(locate('B12.jp2')) as ds:
+            data[12] = ds.read(out_shape=out_shape,
+                            resampling=rasterio.enums.Resampling.nearest)[0]
     if delete:
         os.system('rm -f {}'.format(locate('B*.jp2')))
 
@@ -172,7 +225,7 @@ def gather(sentinel_path,
         if delete:
             os.system('rm -f {}'.format(locate('CLD_20m.jp2')))
 
-    # Get s2cloudless cloud mask
+    # Get s2cloudless cloud mask.  This is always on L1C imagery.
     if not backstop and s2cloudless is not False:
         width_16 = width//16
         height_16 = height//16
@@ -228,8 +281,12 @@ def gather(sentinel_path,
         device = torch.device('cpu')
         if not os.path.exists(locate('weights.pth')):
             os.system('aws s3 cp {} {}'.format(weights, locate('weights.pth')))
-        model = make_model(13, input_stride=1, class_count=1,
-                           divisor=1, pretrained=False).to(device)
+        if l2a:
+            model = make_model(12, input_stride=1, class_count=1,
+                            divisor=1, pretrained=False).to(device)
+        else:
+            model = make_model(13, input_stride=1, class_count=1,
+                            divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
             locate('weights.pth'), map_location=device))
         model = model.eval()
@@ -243,8 +300,12 @@ def gather(sentinel_path,
                 for yoffset in range(0, height, model_window_size):
                     if yoffset + model_window_size > height:
                         yoffset = height - model_window_size - 1
-                    window = data[0:13, xoffset:(xoffset+model_window_size), yoffset:(
-                        yoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
+                    if l2a:
+                        window = data[0:12, xoffset:(xoffset+model_window_size), yoffset:(
+                            yoffset+model_window_size)].reshape(1, 12, model_window_size, model_window_size).astype(np.float32)
+                    else:
+                        window = data[0:13, xoffset:(xoffset+model_window_size), yoffset:(
+                            yoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('2seg').numpy()
                     tmp[0, xoffset:(xoffset+model_window_size),
@@ -254,10 +315,10 @@ def gather(sentinel_path,
         cloud_mask = cloud_mask + tmp
 
         if not delete:
+            inf_profile = copy.copy(profile)
             profile.update(count=1)
-            with rio.open(locate('inference.tif'), 'w', **profile) as ds:
+            with rio.open(locate('inference.tif'), 'w', **inf_profile) as ds:
                 ds.write(tmp)
-            profile.update(count=14)
 
         del tmp
 
@@ -272,7 +333,10 @@ def gather(sentinel_path,
         profile.update(count=14)
 
     # Write scratch file
-    MASK_INDEX = 14-1
+    if l2a:
+        MASK_INDEX = 13-1
+    else:
+        MASK_INDEX = 14-1
     data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
     for i in range(0, MASK_INDEX):
         data[i] = data[i] * data[MASK_INDEX]
@@ -286,7 +350,7 @@ def gather(sentinel_path,
     else:
         [xmin, ymin, xmax, ymax] = bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
-    command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
+    command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
         locate('scratch.tif'), xres, yres, te, filename)
     code = os.system(command)
     codes.append(code)
@@ -320,6 +384,8 @@ if __name__ == '__main__':
         parser.add_argument('--weights', required=False, type=str)
         parser.add_argument('--s2cloudless', required=False,
                             default=False, type=ast.literal_eval)
+        parser.add_argument('--l2a', required=False,
+                            default=False, type=ast.literal_eval)
         return parser
 
     args = cli_parser().parse_args()
@@ -334,7 +400,8 @@ if __name__ == '__main__':
         architecture=args.architecture,
         weights=args.weights,
         bounds=args.bounds,
-        s2cloudless=args.s2cloudless
+        s2cloudless=args.s2cloudless,
+        l2a=args.l2a
     )
 
     if any(codes):
