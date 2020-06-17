@@ -47,6 +47,8 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--response', required=True, type=str)
     parser.add_argument('--weights', required=False, type=str)
     parser.add_argument('--index-start', required=False, default=1, type=int)
+    parser.add_argument('--l2a', required=False,
+                        default=False, type=ast.literal_eval)
     return parser
 
 
@@ -77,6 +79,7 @@ if __name__ == '__main__':
             '--weights,{},'.format(args.weights) if args.weights is not None else '',
             '--bounds,{},{},{},{},'.format(xmin, ymin,
                                            xmax, ymax) if args.bounds_clip else '',
+            '--l2a,{}'.format(args.l2a),
             '--backstop,{}'.format(result.get('backstop', False)),
         ])
         if args.dryrun:
