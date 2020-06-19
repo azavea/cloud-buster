@@ -41,6 +41,7 @@ def merge(name,
           input_s3_uri,
           output_s3_uri,
           local_working_dir='/tmp'):
+
     def working(filename):
         return os.path.join(local_working_dir, filename)
 
@@ -57,7 +58,7 @@ def merge(name,
         os.system('gdalwarp {} -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(working('cloudy.tif'), cloudy_tif))
         os.system('rm {}'.format(working('cloudy.tif')))
         os.system('aws s3 cp {} {}'.format(cloudy_tif, output_s3_uri))
-        os.system('gdalwarp {} $(ls {} | grep -v backstop | grep -v cloudy | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES {}'.format(cloudy_tif, working('*.tif'), working('cloudless.tif')))
+        os.system('gdalwarp {} $(ls {} | grep -v backstop | grep -v cloudy | grep -v mask | sort -r) -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co TILED=YES -co BIGTIFF=YES {}'.format(cloudy_tif, working('*.tif'), working('cloudless.tif')))
         os.system('gdalwarp {} -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES -co BIGTIFF=YES {}'.format(working('cloudless.tif'), cloudless_tif))
         os.system('rm {}'.format(working('cloudless.tif')))
     else:
