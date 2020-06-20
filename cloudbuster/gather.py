@@ -97,8 +97,13 @@ def gather(sentinel_path: str,
         return os.path.join(working_dir, filename)
 
     if not backstop and donor_mask is None:
-        command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ {} --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
-            sentinel_path, working_dir)
+        command = ''.join([
+            'aws s3 sync ',
+            's3://sentinel-s2-l2a/{}/qi/ '.format(sentinel_path),
+            '{} '.format(working_dir),
+            '--exclude="*" --include="CLD_20m.jp2" ',
+            '--request-payer requester'
+        ])
         os.system(command)
 
     if kind == 'L2A':
@@ -358,8 +363,18 @@ def gather(sentinel_path: str,
     else:
         [xmin, ymin, xmax, ymax] = bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
-    command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -multi -co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS -oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
-        working('scratch.tif'), xres, yres, te, filename)
+    command = ''.join([
+        'gdalwarp {} '.format(working('scratch.tif')),
+        '-tr {} {} '.format(xres, yres),
+        '-srcnodata 0 -dstnodata 0 ',
+        '-t_srs epsg:4326 ',
+        '-multi ',
+        '-co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS ',
+        '-oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS ',
+        '-co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES ',
+        '{} '.format(te),
+        '{}'.format(filename)
+    ])
     code = os.system(command)
     codes.append(code)
     if delete:
