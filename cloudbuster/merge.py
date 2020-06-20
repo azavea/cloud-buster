@@ -37,10 +37,14 @@ import rasterio as rio
 import scipy.ndimage
 
 
-def merge(name,
-          input_s3_uri,
-          output_s3_uri,
-          local_working_dir='/tmp'):
+def merge(name: str,
+          input_s3_uri: str,
+          output_s3_uri: str,
+          local_working_dir: str = '/tmp'):
+
+    assert input_s3_uri.endswith('/')
+    assert output_s3_uri.endswith('/')
+    assert not local_working_dir.endswith('/')
 
     def working(filename):
         return os.path.join(local_working_dir, filename)
@@ -49,8 +53,9 @@ def merge(name,
     cloudy_tif = working('{}-cloudy.tif'.format(name))
 
     # Download
-    os.system('aws s3 sync {} {}'.format(input_s3_uri, local_working_dir))
-    backstops = int(os.popen('ls {} | wc -l'.format(working('backstop*.tif'))).read())
+    os.system('aws s3 sync {} {}/'.format(input_s3_uri, local_working_dir))
+    backstops = int(
+        os.popen('ls {} | wc -l'.format(working('backstop*.tif'))).read())
 
     # Produce final images
     if backstops > 0:

@@ -32,6 +32,7 @@ import json
 import math
 import os
 from urllib.parse import urlparse
+from typing import Optional, List
 
 import boto3
 import numpy as np
@@ -68,21 +69,29 @@ def load_architecture(uri: str) -> None:
     exec(arch_code, globals())
 
 
-def gather(sentinel_path,
-           output_s3_uri,
-           index,
-           name,
-           backstop,
-           working_dir='/tmp',
-           bounds=None,
-           delete=True,
-           architecture=None,
-           weights=None,
-           s2cloudless=False,
-           kind=['L1C'],
-           donate_mask=False,
-           donor_mask=None):
+def gather(sentinel_path: str,
+           output_s3_uri: str,
+           index: int,
+           name: str,
+           backstop: bool,
+           working_dir: str = '/tmp',
+           bounds: Optional[List[float]] = None,
+           delete: bool = True,
+           architecture: Optional[str] = None,
+           weights: Optional[str] = None,
+           s2cloudless: bool = False,
+           kind: str = 'L1C',
+           donate_mask: bool = False,
+           donor_mask: Optional[str] = None):
     codes = []
+
+    assert output_s3_uri.endswith('/')
+    assert not working_dir.endswith('/')
+    assert (len(bounds) == 4 if bounds is not None else True)
+    assert (weights.endswith('.pth') if weights is not None else True)
+    assert (kind in ['L1C', 'L2A'])
+    if donor_mask is not None:
+        assert donor_mask.endswith('/') or donor_mask.endswith('.tif')
 
     def working(filename):
         return os.path.join(working_dir, filename)
@@ -149,11 +158,12 @@ def gather(sentinel_path,
     geoTransform = info.get('geoTransform')
     xres = (1.0/min(y1, y2)) * (1.0/110000) * geoTransform[1]
     yres = (1.0/110000) * geoTransform[5]
+    name_pattern = '{}-{:02d}'.format(name, index)
     if not backstop:
-        filename = working('{}-{:02d}.tif'.format(name, index))
-        mask_filename = working('mask-{}-{:02d}.tif'.format(name, index))
+        filename = working('{}.tif'.format(name_pattern))
+        mask_filename = working('mask-{}.tif'.format(name_pattern))
     else:
-        filename = working('backstop-{}-{:02d}.tif'.format(name, index))
+        filename = working('backstop-{}.tif'.format(name_pattern))
     out_shape = (1, width, height)
 
     # Build image
@@ -275,7 +285,8 @@ def gather(sentinel_path,
         load_architecture(architecture)
         device = torch.device('cpu')
         if not os.path.exists(working('weights.pth')):
-            os.system('aws s3 cp {} {}'.format(weights, working('weights.pth')))
+            os.system('aws s3 cp {} {}'.format(
+                weights, working('weights.pth')))
         model = make_model(num_bands-1, input_stride=1,
                            class_count=1, divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
@@ -321,6 +332,10 @@ def gather(sentinel_path,
 
     # If using donor mask, download and load
     if donor_mask is not None:
+
+        if not donor_mask.endswith('.tif'):
+            donor_mask += 'mask-{}.tif'.format(name_pattern)
+
         code = os.system(
             'aws s3 cp {} {}'.format(donor_mask, mask_filename))
         codes.append(code)
