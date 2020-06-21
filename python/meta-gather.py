@@ -53,6 +53,8 @@ def cli_parser() -> argparse.ArgumentParser:
                         default=False, type=ast.literal_eval)
     parser.add_argument('--donor-mask', required=False,
                         default=None, type=str)
+    parser.add_argument('--donor-mask-name', required=False,
+                        default=None, type=str)
     return parser
 
 
@@ -85,6 +87,7 @@ if __name__ == '__main__':
                                            xmax, ymax) if args.bounds_clip else '',
             '--kind,{},'.format(args.kind),
             '--donor-mask,{},'.format(args.donor_mask),
+            '--donor-mask-name,{},'.format(args.donor_mask_name),
             '--donate-mask,{},'.format(args.donate_mask),
             '--backstop,{}'.format(result.get('backstop', False)),
         ])

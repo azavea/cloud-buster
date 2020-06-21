@@ -82,7 +82,8 @@ def gather(sentinel_path: str,
            s2cloudless: bool = False,
            kind: str = 'L1C',
            donate_mask: bool = False,
-           donor_mask: Optional[str] = None):
+           donor_mask: Optional[str] = None,
+           donor_mask_name: Optional[str] = None):
     codes = []
 
     assert output_s3_uri.endswith('/')
@@ -92,6 +93,8 @@ def gather(sentinel_path: str,
     assert (kind in ['L1C', 'L2A'])
     if donor_mask is not None:
         assert donor_mask.endswith('/') or donor_mask.endswith('.tif')
+        if donor_mask.endswith('/'):
+            assert donor_mask_name is not None
 
     def working(filename):
         return os.path.join(working_dir, filename)
@@ -326,7 +329,7 @@ def gather(sentinel_path: str,
             cloud_mask[0], structure=element)
 
     # If donating mask, save and upload
-    if donate_mask:
+    if donate_mask and not backstop:
         profile.update(count=1)
         with rio.open(mask_filename, 'w', **profile) as ds:
             ds.write(cloud_mask)
@@ -339,7 +342,8 @@ def gather(sentinel_path: str,
     if donor_mask is not None:
 
         if not donor_mask.endswith('.tif'):
-            donor_mask += 'mask-{}.tif'.format(name_pattern)
+            donor_name_pattern = '{}-{:02d}'.format(donor_mask_name, index)
+            donor_mask += 'mask-{}.tif'.format(donor_name_pattern)
 
         code = os.system(
             'aws s3 cp {} {}'.format(donor_mask, mask_filename))
@@ -413,6 +417,8 @@ if __name__ == '__main__':
                             default=False, type=ast.literal_eval)
         parser.add_argument('--donor-mask', required=False,
                             default=None, type=str)
+        parser.add_argument('--donor-mask-name', required=False,
+                            default=None, type=str)
         return parser
 
     args = cli_parser().parse_args()
@@ -430,7 +436,9 @@ if __name__ == '__main__':
         s2cloudless=args.s2cloudless,
         kind=args.kind,
         donate_mask=args.donate_mask,
-        donor_mask=args.donar_mask
+        donor_mask=(None if args.donor_mask == 'None' else args.donor_mask),
+        donor_mask_name=(None if args.donor_mask_name ==
+                         'None' else args.donor_mask_name)
     )
 
     if any(codes):
