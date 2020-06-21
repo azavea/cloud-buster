@@ -27,6 +27,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import argparse
+import ast
 import copy
 import json
 import os
@@ -41,9 +42,14 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--mindate', required=True, type=str)
     parser.add_argument('--maxdate', required=True, type=str)
     parser.add_argument('--maxclouds', required=True, type=int)
+    parser.add_argument('--minclouds', required=False, default=0.0, type=int)
     parser.add_argument('--images', required=True, type=int)
     parser.add_argument('--output-dir', required=True, type=str)
     parser.add_argument('--refresh-token', required=True, type=str)
+    parser.add_argument('--kind', required=False,
+                        choices=['L2A', 'L1C'], nargs='+', default=['L1C'])
+    parser.add_argument('--max-uncovered', required=False,
+                        type=float, default=1e-8)
     return parser
 
 
@@ -72,60 +78,118 @@ if __name__ == '__main__':
         '--max-selections {} '.format(args.images),
         '--input /tmp/raw.json ',
         '--output /tmp/filtered.json ',
+        '--max-uncovered {} '.format(args.max_uncovered),
+        '--minclouds {} '.format(args.minclouds),
         '> /dev/null'
     ])
 
     if os.WEXITSTATUS(os.system(command)) != 0:
-        raise Exception()
+        raise Exception('Filter command failed')
 
-    with open('/tmp/filtered.json', 'r') as f:
-        data = json.load(f)
+    try:
+        with open('/tmp/filtered.json', 'r') as f:
+            data = json.load(f)
+    except:
+        raise Exception('Polygon not covered.  Try increasing --max-uncovered')
     data['selections'] = data['selections'][0:args.images]
 
     os.system('mkdir -p {}'.format(args.output_dir))
 
-    i = 0
-    for (selection, index) in zip(data['selections'], range(0, len(data))):
-        selection['index'] = index
+    for kind in args.kind:
+        print(kind)
 
-        command = ''.join([
-            'aws s3 sync ',
-            's3://sentinel-s2-l1c/{}/ '.format(
-                selection.get('sceneMetadata').get('path')),
-            '/tmp/ ',
-            '--exclude="*" --include="B*.jp2" ',
-            '--request-payer requester'
-        ])
+        if kind == 'L2A':
+            sentinel_bucket = 'sentinel-s2-l2a'
+            sentinel_10m = 'R10m/'
+            sentinel_20m = 'R20m/'
+            sentinel_60m = 'R60m/'
+        elif kind == 'L1C':
+            sentinel_bucket = 'sentinel-s2-l1c'
+            sentinel_10m = sentinel_20m = sentinel_60m = ''
 
-        if os.WEXITSTATUS(os.system(command)) != 0:
-            raise Exception()
+        for (selection, index) in zip(data['selections'], range(0, len(data))):
+            selection['index'] = index
 
-        with rio.open('/tmp/B04.jp2', 'r') as ds:
-            profile = copy.copy(ds.profile)
-            width = ds.width
-            height = ds.height
-        profile.update(count=13, compress='deflate',
-                       bigtiff='yes', driver='GTiff')
+            print('10m')
+            command = ''.join([
+                'aws s3 sync ',
+                's3://{}/{}/{} '.format(sentinel_bucket,
+                                        selection.get(
+                                            'sceneMetadata').get('path'),
+                                        sentinel_10m),
+                '/tmp/ ',
+                '--exclude="*" --include="B0[2348].jp2" ',
+                '--request-payer requester'
+            ])
+            if os.WEXITSTATUS(os.system(command)) != 0:
+                raise Exception()
 
-        bands = np.zeros((13, width, height), dtype=np.uint16)
+            print('20m')
+            command = ''.join([
+                'aws s3 sync ',
+                's3://{}/{}/{} '.format(sentinel_bucket,
+                                        selection.get(
+                                            'sceneMetadata').get('path'),
+                                        sentinel_20m),
+                '/tmp/ ',
+                '--exclude="*" --include="B0[567].jp2" --include="B8A.jp2" --include="B1[12].jp2" ',
+                '--request-payer requester'
+            ])
+            if os.WEXITSTATUS(os.system(command)) != 0:
+                raise Exception()
 
-        filenames = ['B01.jp2', 'B02.jp2',
-                     'B03.jp2', 'B04.jp2',
-                     'B05.jp2', 'B06.jp2',
-                     'B07.jp2', 'B08.jp2',
-                     'B8A.jp2', 'B09.jp2',
-                     'B10.jp2', 'B11.jp2',
-                     'B12.jp2']
+            print('60m')
+            command = ''.join([
+                'aws s3 sync ',
+                's3://{}/{}/{} '.format(sentinel_bucket,
+                                        selection.get(
+                                            'sceneMetadata').get('path'),
+                                        sentinel_60m),
+                '/tmp/ ',
+                '--exclude="*" --include="B0[19].jp2" --include="B10.jp2" ',
+                '--request-payer requester'
+            ])
+            if os.WEXITSTATUS(os.system(command)) != 0:
+                raise Exception()
 
-        print('reading')
-        for (filename, band) in zip(filenames, range(0, len(bands))):
-            print('.')
-            with rio.open('/tmp/{}'.format(filename), 'r') as ds:
-                bands[band] = ds.read(out_shape=(1, width, height))
+            with rio.open('/tmp/B04.jp2', 'r') as ds:
+                profile = copy.copy(ds.profile)
+                width = ds.width
+                height = ds.height
+            if kind == 'L2A':
+                profile.update(count=12, compress='deflate',
+                               bigtiff='yes', driver='GTiff')
+                bands = np.zeros((12, width, height), dtype=np.uint16)
+            elif kind == 'L1C':
+                profile.update(count=13, compress='deflate',
+                               bigtiff='yes', driver='GTiff')
+                bands = np.zeros((13, width, height), dtype=np.uint16)
 
-        print('writing')
-        with rio.open('{}/{}.tif'.format(args.output_dir, index), 'w', **profile) as ds:
-            ds.write(bands)
+            if kind == 'L2A':
+                filenames = ['B01.jp2', 'B02.jp2',
+                             'B03.jp2', 'B04.jp2',
+                             'B05.jp2', 'B06.jp2',
+                             'B07.jp2', 'B08.jp2',
+                             'B8A.jp2', 'B09.jp2',
+                             'B11.jp2', 'B12.jp2']
+            elif kind == 'L1C':
+                filenames = ['B01.jp2', 'B02.jp2',
+                             'B03.jp2', 'B04.jp2',
+                             'B05.jp2', 'B06.jp2',
+                             'B07.jp2', 'B08.jp2',
+                             'B8A.jp2', 'B09.jp2',
+                             'B10.jp2', 'B11.jp2',
+                             'B12.jp2']
+
+            print('reading')
+            for (filename, band) in zip(filenames, range(0, len(bands))):
+                print('.')
+                with rio.open('/tmp/{}'.format(filename), 'r') as ds:
+                    bands[band] = ds.read(out_shape=(1, width, height))
+
+            print('writing')
+            with rio.open('{}/{}-{}.tif'.format(args.output_dir, kind.upper(), index), 'w', **profile) as ds:
+                ds.write(bands)
 
     with open('{}/info.json'.format(args.output_dir), 'w') as f:
         json.dump(data, f, sort_keys=True,

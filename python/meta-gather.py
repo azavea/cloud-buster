@@ -47,6 +47,14 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--response', required=True, type=str)
     parser.add_argument('--weights', required=False, type=str)
     parser.add_argument('--index-start', required=False, default=1, type=int)
+    parser.add_argument('--kind', required=False,
+                        choices=['L2A', 'L1C'], default='L1C')
+    parser.add_argument('--donate-mask', required=False,
+                        default=False, type=ast.literal_eval)
+    parser.add_argument('--donor-mask', required=False,
+                        default=None, type=str)
+    parser.add_argument('--donor-mask-name', required=False,
+                        default=None, type=str)
     return parser
 
 
@@ -77,6 +85,10 @@ if __name__ == '__main__':
             '--weights,{},'.format(args.weights) if args.weights is not None else '',
             '--bounds,{},{},{},{},'.format(xmin, ymin,
                                            xmax, ymax) if args.bounds_clip else '',
+            '--kind,{},'.format(args.kind),
+            '--donor-mask,{},'.format(args.donor_mask),
+            '--donor-mask-name,{},'.format(args.donor_mask_name),
+            '--donate-mask,{},'.format(args.donate_mask),
             '--backstop,{}'.format(result.get('backstop', False)),
         ])
         if args.dryrun:

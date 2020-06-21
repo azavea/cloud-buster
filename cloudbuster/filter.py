@@ -35,7 +35,7 @@ import shapely.ops  # type: ignore
 
 
 def filter_response(response,
-                    backstop=True,
+                    backstop_bool=True,
                     coverage_count=3,
                     max_selections=None,
                     date_regexp=None,
@@ -62,12 +62,12 @@ def filter_response(response,
     shapes = []
     for i in range(coverage_count):
         shapes.append(copy.copy(shape))
-    backstop = copy.copy(shape)
+    backstop_geom = copy.copy(shape)
 
     selections = []
 
     def not_backstopped():
-        area = backstop.area
+        area = backstop_geom.area
         print(area)
         return area > max_uncovered
 
@@ -104,11 +104,11 @@ def filter_response(response,
         results = results[0:i_best] + results[i_best+1:]
 
     # Backstop
-    while (not_backstopped() and backstop) and (not enough_selected()) and (len(results) > 0):
+    while (not_backstopped() and backstop_bool) and (not enough_selected()) and (len(results) > 0):
         i_best = -1
         area_best = 0.0
         for i in range(len(results)):
-            raw_area = results[i].get('dataShape').intersection(backstop).area
+            raw_area = results[i].get('dataShape').intersection(backstop_geom).area
             non_cloudy_pct = 1.0 - \
                 float(results[i].get('sceneMetadata').get(
                     'cloudyPixelPercentage'))/100.0
@@ -118,7 +118,7 @@ def filter_response(response,
                 area_best = area
         if area_best <= 0.0:
             break
-        backstop = backstop.difference(results[i_best].get('dataShape'))
+        backstop_geom = backstop_geom.difference(results[i_best].get('dataShape'))
         results[i_best]['backstop'] = True
         selections.append(results[i_best])
         results = results[0:i_best] + results[i_best+1:]
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         max_uncovered=args.max_uncovered,
         max_selections=args.max_selections,
         coverage_count=args.coverage_count,
-        backstop=args.backstop
+        backstop_bool=args.backstop
     )
 
     # Render results

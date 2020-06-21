@@ -32,6 +32,7 @@ import json
 import math
 import os
 from urllib.parse import urlparse
+from typing import Optional, List
 
 import boto3
 import numpy as np
@@ -68,33 +69,92 @@ def load_architecture(uri: str) -> None:
     exec(arch_code, globals())
 
 
-def gather(sentinel_path,
-           output_s3_uri,
-           index,
-           name,
-           backstop,
-           working_dir='/tmp',
-           bounds=None,
-           delete=True,
-           architecture=None,
-           weights=None,
-           s2cloudless=False):
+def gather(sentinel_path: str,
+           output_s3_uri: str,
+           index: int,
+           name: str,
+           backstop: bool,
+           working_dir: str = '/tmp',
+           bounds: Optional[List[float]] = None,
+           delete: bool = True,
+           architecture: Optional[str] = None,
+           weights: Optional[str] = None,
+           s2cloudless: bool = False,
+           kind: str = 'L1C',
+           donate_mask: bool = False,
+           donor_mask: Optional[str] = None,
+           donor_mask_name: Optional[str] = None):
     codes = []
 
-    def locate(filename):
+    assert output_s3_uri.endswith('/')
+    assert not working_dir.endswith('/')
+    assert (len(bounds) == 4 if bounds is not None else True)
+    assert (weights.endswith('.pth') if weights is not None else True)
+    assert (kind in ['L1C', 'L2A'])
+    if donor_mask is not None:
+        assert donor_mask.endswith('/') or donor_mask.endswith('.tif')
+        if donor_mask.endswith('/'):
+            assert donor_mask_name is not None
+
+    def working(filename):
         return os.path.join(working_dir, filename)
 
-    # Download data
-    command = 'aws s3 sync s3://sentinel-s2-l1c/{}/ {} --exclude="*" --include="B*.jp2" --request-payer requester'.format(
-        sentinel_path, working_dir)
-    os.system(command)
-    if not backstop:
-        command = 'aws s3 sync s3://sentinel-s2-l2a/{}/qi/ {} --exclude="*" --include="CLD_20m.jp2" --request-payer requester'.format(
-            sentinel_path, working_dir)
+    if not backstop and donor_mask is None:
+        command = ''.join([
+            'aws s3 sync ',
+            's3://sentinel-s2-l2a/{}/qi/ '.format(sentinel_path),
+            '{} '.format(working_dir),
+            '--exclude="*" --include="CLD_20m.jp2" ',
+            '--request-payer requester'
+        ])
         os.system(command)
 
+    if kind == 'L2A':
+        sentinel_bucket = 'sentinel-s2-l2a'
+        sentinel_10m = 'R10m/'
+        sentinel_20m = 'R20m/'
+        sentinel_60m = 'R60m/'
+        num_bands = 13
+    elif kind == 'L1C':
+        sentinel_bucket = 'sentinel-s2-l1c'
+        sentinel_10m = sentinel_20m = sentinel_60m = ''
+        num_bands = 14
+    else:
+        raise Exception()
+
+    # 10m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
+                                            sentinel_path, sentinel_10m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[2348].jp2" ',
+        '--request-payer requester'
+    ])
+    os.system(command)
+
+    # 20m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
+                                            sentinel_path, sentinel_20m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[567].jp2" --include="B8A.jp2" --include="B1[12].jp2" ',
+        '--request-payer requester'
+    ])
+    os.system(command)
+
+    # 60m
+    command = ''.join([
+        'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
+                                            sentinel_path, sentinel_60m),
+        '{} --exclude="*" '.format(working_dir),
+        '--include="B0[19].jp2" --include="B10.jp2" ',
+        '--request-payer requester'
+    ])
+    os.system(command)
+
     # Determine resolution, size, and filename
-    info = json.loads(os.popen('gdalinfo -json -proj4 {}'.format(locate('B04.jp2'))).read())
+    info = json.loads(
+        os.popen('gdalinfo -json -proj4 {}'.format(working('B04.jp2'))).read())
     [width, height] = info.get('size')
     [urx, ury] = info.get('cornerCoordinates').get('upperRight')
     [lrx, lry] = info.get('cornerCoordinates').get('lowerRight')
@@ -106,74 +166,86 @@ def gather(sentinel_path,
     geoTransform = info.get('geoTransform')
     xres = (1.0/min(y1, y2)) * (1.0/110000) * geoTransform[1]
     yres = (1.0/110000) * geoTransform[5]
+    name_pattern = '{}-{:02d}'.format(name, index)
     if not backstop:
-        filename = locate('{}-{:02d}.tif'.format(name, index))
+        filename = working('{}.tif'.format(name_pattern))
+        mask_filename = working('mask-{}.tif'.format(name_pattern))
     else:
-        filename = locate('backstop-{}-{:02d}.tif'.format(name, index))
+        filename = working('backstop-{}.tif'.format(name_pattern))
     out_shape = (1, width, height)
 
     # Build image
-    data = np.zeros((14, width, height), dtype=np.uint16)
-    with rio.open(locate('B01.jp2')) as ds:
+    data = np.zeros((num_bands, width, height), dtype=np.uint16)
+    with rio.open(working('B01.jp2')) as ds:
         data[0] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B02.jp2')) as ds:
+    with rio.open(working('B02.jp2')) as ds:
         data[1] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B03.jp2')) as ds:
+    with rio.open(working('B03.jp2')) as ds:
         data[2] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B04.jp2')) as ds:
+    with rio.open(working('B04.jp2')) as ds:
         data[3] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
         geoTransform = copy.copy(ds.transform)
         crs = copy.copy(ds.crs)
         profile = copy.copy(ds.profile)
-        profile.update(count=14, driver='GTiff', bigtiff='yes')
-    with rio.open(locate('B05.jp2')) as ds:
+        profile.update(count=num_bands, driver='GTiff', bigtiff='yes')
+    with rio.open(working('B05.jp2')) as ds:
         data[4] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B06.jp2')) as ds:
+    with rio.open(working('B06.jp2')) as ds:
         data[5] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B07.jp2')) as ds:
+    with rio.open(working('B07.jp2')) as ds:
         data[6] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B08.jp2')) as ds:
+    with rio.open(working('B08.jp2')) as ds:
         data[7] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B8A.jp2')) as ds:
+    with rio.open(working('B8A.jp2')) as ds:
         data[8] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B09.jp2')) as ds:
+    with rio.open(working('B09.jp2')) as ds:
         data[9] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B10.jp2')) as ds:
-        data[10] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B11.jp2')) as ds:
-        data[11] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
-    with rio.open(locate('B12.jp2')) as ds:
-        data[12] = ds.read(out_shape=out_shape,
-                           resampling=rasterio.enums.Resampling.nearest)[0]
+    if kind == 'L2A':
+        with rio.open(working('B11.jp2')) as ds:
+            data[10] = ds.read(out_shape=out_shape,
+                               resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(working('B12.jp2')) as ds:
+            data[11] = ds.read(out_shape=out_shape,
+                               resampling=rasterio.enums.Resampling.nearest)[0]
+    elif kind == 'L1C':
+        with rio.open(working('B10.jp2')) as ds:
+            data[10] = ds.read(out_shape=out_shape,
+                               resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(working('B11.jp2')) as ds:
+            data[11] = ds.read(out_shape=out_shape,
+                               resampling=rasterio.enums.Resampling.nearest)[0]
+        with rio.open(working('B12.jp2')) as ds:
+            data[12] = ds.read(out_shape=out_shape,
+                               resampling=rasterio.enums.Resampling.nearest)[0]
+    else:
+        raise Exception()
     if delete:
-        os.system('rm -f {}'.format(locate('B*.jp2')))
+        os.system('rm -f {}'.format(working('B*.jp2')))
 
     cloud_mask = np.zeros(out_shape, dtype=np.uint16)
 
     # Get the stock cloud mask
-    if not backstop and os.path.isfile(locate('CLD_20m.jp2')):
-        with rio.open(locate('CLD_20m.jp2')) as ds:
+    if not backstop and os.path.isfile(working('CLD_20m.jp2')) and donor_mask is None:
+        with rio.open(working('CLD_20m.jp2')) as ds:
             tmp = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)
             cloud_mask = cloud_mask + (tmp > 40).astype(np.uint16)
             del tmp
         if delete:
-            os.system('rm -f {}'.format(locate('CLD_20m.jp2')))
+            os.system('rm -f {}'.format(working('CLD_20m.jp2')))
 
-    # Get s2cloudless cloud mask
-    if not backstop and s2cloudless is not False:
+    # Get s2cloudless cloud mask.  This is always on L1C imagery.
+    if not backstop and s2cloudless is not False and kind == 'L1C' and donor_mask is None:
         width_16 = width//16
         height_16 = height//16
 
@@ -211,27 +283,22 @@ def gather(sentinel_path,
 
         cloud_mask = cloud_mask + tmp
 
-        if not delete:
-            profile.update(count=1)
-            with rio.open(locate('s2cloudless.tif'), 'w', **profile) as ds:
-                ds.write(tmp)
-            profile.update(count=14)
-
         del tmp
         del small_tmp
         del small_data
 
     # Get model cloud mask
-    if not backstop and architecture is not None and weights is not None:
+    if not backstop and architecture is not None and weights is not None and donor_mask is None:
         model_window_size = 512
         load_architecture(architecture)
         device = torch.device('cpu')
-        if not os.path.exists(locate('weights.pth')):
-            os.system('aws s3 cp {} {}'.format(weights, locate('weights.pth')))
-        model = make_model(13, input_stride=1, class_count=1,
-                           divisor=1, pretrained=False).to(device)
+        if not os.path.exists(working('weights.pth')):
+            os.system('aws s3 cp {} {}'.format(
+                weights, working('weights.pth')))
+        model = make_model(num_bands-1, input_stride=1,
+                           class_count=1, divisor=1, pretrained=False).to(device)
         model.load_state_dict(torch.load(
-            locate('weights.pth'), map_location=device))
+            working('weights.pth'), map_location=device))
         model = model.eval()
 
         with torch.no_grad():
@@ -243,8 +310,8 @@ def gather(sentinel_path,
                 for yoffset in range(0, height, model_window_size):
                     if yoffset + model_window_size > height:
                         yoffset = height - model_window_size - 1
-                    window = data[0:13, xoffset:(xoffset+model_window_size), yoffset:(
-                        yoffset+model_window_size)].reshape(1, 13, model_window_size, model_window_size).astype(np.float32)
+                    window = data[0:(num_bands-1), xoffset:(xoffset+model_window_size), yoffset:(
+                        yoffset+model_window_size)].reshape(1, num_bands-1, model_window_size, model_window_size).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
                     out = model(tensor).get('2seg').numpy()
                     tmp[0, xoffset:(xoffset+model_window_size),
@@ -253,31 +320,45 @@ def gather(sentinel_path,
         tmp = (tmp > 0.0).astype(np.uint16)
         cloud_mask = cloud_mask + tmp
 
-        if not delete:
-            profile.update(count=1)
-            with rio.open(locate('inference.tif'), 'w', **profile) as ds:
-                ds.write(tmp)
-            profile.update(count=14)
-
         del tmp
 
-    element = np.ones((11, 11))
-    cloud_mask[0] = scipy.ndimage.binary_dilation(
-        cloud_mask[0], structure=element)
+    # Dilate mask
+    if donor_mask is None:
+        element = np.ones((11, 11))
+        cloud_mask[0] = scipy.ndimage.binary_dilation(
+            cloud_mask[0], structure=element)
 
-    if not delete:
+    # If donating mask, save and upload
+    if donate_mask and not backstop:
         profile.update(count=1)
-        with rio.open(locate('cloud_mask.tif'), 'w', **profile) as ds:
+        with rio.open(mask_filename, 'w', **profile) as ds:
             ds.write(cloud_mask)
-        profile.update(count=14)
+        profile.update(count=num_bands)
+        code = os.system('aws s3 cp {} {}'.format(
+            mask_filename, output_s3_uri))
+        codes.append(code)
+
+    # If using donor mask, download and load
+    if donor_mask is not None:
+
+        if not donor_mask.endswith('.tif'):
+            donor_name_pattern = '{}-{:02d}'.format(donor_mask_name, index)
+            donor_mask += 'mask-{}.tif'.format(donor_name_pattern)
+
+        code = os.system(
+            'aws s3 cp {} {}'.format(donor_mask, mask_filename))
+        codes.append(code)
+        with rio.open(mask_filename, 'r') as ds:
+            cloud_mask = ds.read()[0]
+        if delete:
+            os.system('rm -f {}'.format(working(mask_filename)))
 
     # Write scratch file
-    MASK_INDEX = 14-1
-    data[MASK_INDEX] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
-    for i in range(0, MASK_INDEX):
-        data[i] = data[i] * data[MASK_INDEX]
-    data[MASK_INDEX] = data[MASK_INDEX] * index
-    with rio.open(locate('scratch.tif'), 'w', **profile) as ds:
+    data[num_bands-1] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
+    for i in range(0, num_bands-1):
+        data[i] = data[i] * data[num_bands-1]
+    data[num_bands-1] = data[num_bands-1] * index
+    with rio.open(working('scratch.tif'), 'w', **profile) as ds:
         ds.write(data)
 
     # Warp and compress to create final file
@@ -286,12 +367,22 @@ def gather(sentinel_path,
     else:
         [xmin, ymin, xmax, ymax] = bounds
         te = '-te {} {} {} {}'.format(xmin, ymin, xmax, ymax)
-    command = 'gdalwarp {} -tr {} {} -srcnodata 0 -dstnodata 0 -t_srs epsg:4326 -co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES {} {}'.format(
-        locate('scratch.tif'), xres, yres, te, filename)
+    command = ''.join([
+        'gdalwarp {} '.format(working('scratch.tif')),
+        '-tr {} {} '.format(xres, yres),
+        '-srcnodata 0 -dstnodata 0 ',
+        '-t_srs epsg:4326 ',
+        '-multi ',
+        '-co NUM_THREADS=ALL_CPUS -wo NUM_THREADS=ALL_CPUS ',
+        '-oo NUM_THREADS=ALL_CPUS -doo NUM_THREADS=ALL_CPUS ',
+        '-co BIGTIFF=YES -co COMPRESS=DEFLATE -co PREDICTOR=2 -co TILED=YES -co SPARSE_OK=YES ',
+        '{} '.format(te),
+        '{}'.format(filename)
+    ])
     code = os.system(command)
     codes.append(code)
     if delete:
-        os.system('rm -f {}'.format(locate('scratch.tif')))
+        os.system('rm -f {}'.format(working('scratch.tif')))
 
     # Upload final file
     code = os.system('aws s3 cp {} {}'.format(filename, output_s3_uri))
@@ -320,6 +411,14 @@ if __name__ == '__main__':
         parser.add_argument('--weights', required=False, type=str)
         parser.add_argument('--s2cloudless', required=False,
                             default=False, type=ast.literal_eval)
+        parser.add_argument('--kind', required=False,
+                            choices=['L2A', 'L1C'], default='L1C')
+        parser.add_argument('--donate-mask', required=False,
+                            default=False, type=ast.literal_eval)
+        parser.add_argument('--donor-mask', required=False,
+                            default=None, type=str)
+        parser.add_argument('--donor-mask-name', required=False,
+                            default=None, type=str)
         return parser
 
     args = cli_parser().parse_args()
@@ -334,7 +433,12 @@ if __name__ == '__main__':
         architecture=args.architecture,
         weights=args.weights,
         bounds=args.bounds,
-        s2cloudless=args.s2cloudless
+        s2cloudless=args.s2cloudless,
+        kind=args.kind,
+        donate_mask=args.donate_mask,
+        donor_mask=(None if args.donor_mask == 'None' else args.donor_mask),
+        donor_mask_name=(None if args.donor_mask_name ==
+                         'None' else args.donor_mask_name)
     )
 
     if any(codes):
