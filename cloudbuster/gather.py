@@ -294,7 +294,10 @@ def gather(sentinel_path: str,
     if not backstop and architecture is not None and weights is not None and donor_mask is None:
         model_window_size = 512
         load_architecture(architecture)
-        device = torch.device('cpu')
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        else:
+            device = torch.device('cpu')
         if not os.path.exists(working('weights.pth')):
             os.system('aws s3 cp {} {}'.format(
                 weights, working('weights.pth')))
@@ -316,7 +319,7 @@ def gather(sentinel_path: str,
                     window = data[0:(num_bands-1), xoffset:(xoffset+model_window_size), yoffset:(
                         yoffset+model_window_size)].reshape(1, num_bands-1, model_window_size, model_window_size).astype(np.float32)
                     tensor = torch.from_numpy(window).to(device)
-                    out = model(tensor).get('2seg').numpy()
+                    out = model(tensor).get('2seg').cpu().numpy()
                     tmp[0, xoffset:(xoffset+model_window_size),
                         yoffset:(yoffset+model_window_size)] = out
 
