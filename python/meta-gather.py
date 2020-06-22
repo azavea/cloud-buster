@@ -55,6 +55,7 @@ def cli_parser() -> argparse.ArgumentParser:
                         default=None, type=str)
     parser.add_argument('--donor-mask-name', required=False,
                         default=None, type=str)
+    parser.add_argument('--tmp', required=False, type=str, default='/tmp')
     return parser
 
 
@@ -89,6 +90,7 @@ if __name__ == '__main__':
             '--donor-mask,{},'.format(args.donor_mask),
             '--donor-mask-name,{},'.format(args.donor_mask_name),
             '--donate-mask,{},'.format(args.donate_mask),
+            '--tmp,{},'.format(args.tmp),
             '--backstop,{}'.format(result.get('backstop', False)),
         ])
         if args.dryrun:

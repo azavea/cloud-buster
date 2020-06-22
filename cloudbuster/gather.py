@@ -426,6 +426,7 @@ if __name__ == '__main__':
                             default=None, type=str)
         parser.add_argument('--donor-mask-name', required=False,
                             default=None, type=str)
+        parser.add_argument('--tmp', required=False, type=str, default='/tmp')
         return parser
 
     args = cli_parser().parse_args()
@@ -441,6 +442,7 @@ if __name__ == '__main__':
         args.index,
         args.name,
         args.backstop,
+        working_dir=args.tmp,
         delete=args.delete,
         architecture=args.architecture,
         weights=args.weights,
