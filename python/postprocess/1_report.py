@@ -44,7 +44,7 @@ def cli_parser() -> argparse.ArgumentParser:
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    input_name = copy.copy(args.input).replace('s3://', '/vsis3/')
+    input_name = copy.deepcopy(args.input).replace('s3://', '/vsis3/')
     info = json.loads(os.popen('gdalinfo -json {}'.format(input_name)).read())
     [x, y] = info.get('size')
     os.system('gdal_translate -b 14 -co TILED=YES -co SPARSE_OK=YES {} /tmp/out0.tif'.format(input_name))

@@ -61,8 +61,8 @@ def filter_response(response,
     shape = shapely.geometry.shape(response.get('aoi'))
     shapes = []
     for i in range(coverage_count):
-        shapes.append(copy.copy(shape))
-    backstop_geom = copy.copy(shape)
+        shapes.append(copy.deepcopy(shape))
+    backstop_geom = copy.deepcopy(shape)
 
     selections = []
 

@@ -153,7 +153,7 @@ if __name__ == '__main__':
                 raise Exception()
 
             with rio.open('/tmp/B04.jp2', 'r') as ds:
-                profile = copy.copy(ds.profile)
+                profile = copy.deepcopy(ds.profile)
                 width = ds.width
                 height = ds.height
             if kind == 'L2A':

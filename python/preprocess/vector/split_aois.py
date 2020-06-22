@@ -45,10 +45,10 @@ if __name__ == '__main__':
     with open(args.input, 'r') as f:
         in_data = json.load(f)
 
-    features = copy.copy(in_data.get('features'))
+    features = copy.deepcopy(in_data.get('features'))
 
     for feature in features:
-        out_data = copy.copy(in_data)
+        out_data = copy.deepcopy(in_data)
         out_data['features'] = [feature]
         properties = feature.get('properties')
         name = properties.get(args.name_property)

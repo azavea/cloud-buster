@@ -53,7 +53,12 @@ def merge(name: str,
     cloudy_tif = working('{}-cloudy.tif'.format(name))
 
     # Download
-    os.system('aws s3 sync {} {}/'.format(input_s3_uri, local_working_dir))
+    os.system(''.join([
+       'aws s3 sync ',
+       '{} '.format(input_s3_uri),
+       '{}/ '.format(local_working_dir),
+       '--exclude="*" --include="*.tif" --exclude="mask*.tif"'
+    ]))
     backstops = int(
         os.popen('ls {} | wc -l'.format(working('backstop*.tif'))).read())
 

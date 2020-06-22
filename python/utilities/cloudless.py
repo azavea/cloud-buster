@@ -64,11 +64,10 @@ if __name__ == '__main__':
         height = ds.height
         data = ds.read(out_shape=(ds.count, width // factor, height // factor),
                        resampling=rasterio.enums.Resampling.nearest)
-        profile = copy.copy(ds.profile)
-        transform = copy.copy(ds.transform)
-        crs = copy.copy(ds.crs)
-    profile.update(count=1, dtype=np.float32)
-    profile.update(compression='deflate', predictor=2)
+        profile = copy.deepcopy(ds.profile)
+        transform = copy.deepcopy(ds.transform)
+        crs = copy.deepcopy(ds.crs)
+    profile.update(count=1, dtype=np.float32, compression='deflate', predictor=2)
     data = data[0:13, :, :]
     data = np.transpose(data, axes=(1, 2, 0))
     (x, y, c) = data.shape

@@ -49,7 +49,7 @@ if __name__ == '__main__':
         os.environ['CURL_CA_BUNDLE'] = '/etc/ssl/certs/ca-certificates.crt'
 
     with rio.open(args.input, 'r') as ds:
-        profile = copy.copy(ds.profile)
+        profile = copy.deepcopy(ds.profile)
         profile.update(count=3, dtype=np.uint8)
         in_data = ds.read()
 

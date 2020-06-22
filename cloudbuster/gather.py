@@ -126,8 +126,8 @@ def gather(sentinel_path: str,
     command = ''.join([
         'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
                                             sentinel_path, sentinel_10m),
-        '{} --exclude="*" '.format(working_dir),
-        '--include="B0[2348].jp2" ',
+        '{} '.format(working_dir),
+        '--exclude="*" --include="B0[2348].jp2" ',
         '--request-payer requester'
     ])
     os.system(command)
@@ -136,7 +136,8 @@ def gather(sentinel_path: str,
     command = ''.join([
         'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
                                             sentinel_path, sentinel_20m),
-        '{} --exclude="*" '.format(working_dir),
+        '{} '.format(working_dir),
+        '--exclude="*" '
         '--include="B0[567].jp2" --include="B8A.jp2" --include="B1[12].jp2" ',
         '--request-payer requester'
     ])
@@ -146,7 +147,8 @@ def gather(sentinel_path: str,
     command = ''.join([
         'aws s3 sync s3://{}/{}/{} '.format(sentinel_bucket,
                                             sentinel_path, sentinel_60m),
-        '{} --exclude="*" '.format(working_dir),
+        '{} '.format(working_dir),
+        '--exclude="*" '
         '--include="B0[19].jp2" --include="B10.jp2" ',
         '--request-payer requester'
     ])
@@ -188,10 +190,11 @@ def gather(sentinel_path: str,
     with rio.open(working('B04.jp2')) as ds:
         data[3] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
-        geoTransform = copy.copy(ds.transform)
-        crs = copy.copy(ds.crs)
-        profile = copy.copy(ds.profile)
-        profile.update(count=num_bands, driver='GTiff', bigtiff='yes')
+        geoTransform = copy.deepcopy(ds.transform)
+        crs = copy.deepcopy(ds.crs)
+        profile = copy.deepcopy(ds.profile)
+        profile.update(count=num_bands, driver='GTiff',
+                       bigtiff='yes', sparse_ok=True, tiled=True)
     with rio.open(working('B05.jp2')) as ds:
         data[4] = ds.read(out_shape=out_shape,
                           resampling=rasterio.enums.Resampling.nearest)[0]
@@ -330,28 +333,29 @@ def gather(sentinel_path: str,
 
     # If donating mask, save and upload
     if donate_mask and not backstop:
-        profile.update(count=1)
-        with rio.open(mask_filename, 'w', **profile) as ds:
+        mask_profile = copy.deepcopy(profile)
+        mask_profile.update(count=1, compress='deflate', predictor=2)
+        with rio.open(mask_filename, 'w', **mask_profile) as ds:
             ds.write(cloud_mask)
-        profile.update(count=num_bands)
         code = os.system('aws s3 cp {} {}'.format(
             mask_filename, output_s3_uri))
         codes.append(code)
 
     # If using donor mask, download and load
-    if donor_mask is not None:
+    if donor_mask is not None and not backstop:
 
         if not donor_mask.endswith('.tif'):
             donor_name_pattern = '{}-{:02d}'.format(donor_mask_name, index)
-            donor_mask += 'mask-{}.tif'.format(donor_name_pattern)
+            donor_mask_filename = 'mask-{}.tif'.format(donor_name_pattern)
+            donor_mask += donor_mask_filename
 
         code = os.system(
-            'aws s3 cp {} {}'.format(donor_mask, mask_filename))
+            'aws s3 cp {} {}'.format(donor_mask, donor_mask_filename))
         codes.append(code)
-        with rio.open(mask_filename, 'r') as ds:
+        with rio.open(donor_mask_filename, 'r') as ds:
             cloud_mask = ds.read()[0]
         if delete:
-            os.system('rm -f {}'.format(working(mask_filename)))
+            os.system('rm -f {}'.format(working(donor_mask_filename)))
 
     # Write scratch file
     data[num_bands-1] = ((cloud_mask < 1) * (data[0] != 0)).astype(np.uint16)
@@ -423,6 +427,11 @@ if __name__ == '__main__':
 
     args = cli_parser().parse_args()
 
+    if args.donor_mask == 'None':
+        args.donor_mask = None
+    if args.donor_mask_name == 'None':
+        args.donor_mask_name = None
+
     codes = gather(
         args.sentinel_path,
         args.output_path,
@@ -436,9 +445,8 @@ if __name__ == '__main__':
         s2cloudless=args.s2cloudless,
         kind=args.kind,
         donate_mask=args.donate_mask,
-        donor_mask=(None if args.donor_mask == 'None' else args.donor_mask),
-        donor_mask_name=(None if args.donor_mask_name ==
-                         'None' else args.donor_mask_name)
+        donor_mask=args.donor_mask,
+        donor_mask_name=args.donor_mask_name
     )
 
     if any(codes):

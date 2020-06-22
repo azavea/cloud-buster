@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     with rio.open(args.input, 'r') as ds:
         data = ds.read()
-        profile = copy.copy(ds.profile)
+        profile = copy.deepcopy(ds.profile)
     profile.update(compress='deflate', predictor=2)
 
     with rio.open(args.output, 'w', **profile) as ds:

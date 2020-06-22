@@ -98,7 +98,7 @@ if __name__ == '__main__':
                 y1 = y0 + ystepsize
                 box = shapely.geometry.Polygon(
                     [(x0, y0), (x0, y1), (x1, y1), (x1, y0)])
-                f = copy.copy(feature)
+                f = copy.deepcopy(feature)
                 f['geometry'] = shapely.geometry.mapping(box)
                 feature_collection['features'].append(f)
     elif not args.transform_before:
@@ -120,7 +120,7 @@ if __name__ == '__main__':
                 x1, y1 = transformer.transform(x1, y1)
                 box = shapely.geometry.Polygon(
                     [(x0, y0), (x0, y1), (x1, y1), (x1, y0)])
-                f = copy.copy(feature)
+                f = copy.deepcopy(feature)
                 f['geometry'] = shapely.geometry.mapping(box)
                 feature_collection['features'].append(f)
 
