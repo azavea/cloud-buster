@@ -43,7 +43,7 @@ def cli_parser() -> argparse.ArgumentParser:
 if __name__ == '__main__':
     args = cli_parser().parse_args()
 
-    output = copy.copy(args.metadata_file).replace('.tif', '-{}.tif'.format(args.postfix))
+    output = copy.deepcopy(args.metadata_file).replace('.tif', '-{}.tif'.format(args.postfix))
     args.input = args.input.replace('s3://', '/vsis3/')
     args.metadata_file = args.metadata_file.replace('s3://', '/vsis3/')
 

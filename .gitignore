@@ -4,6 +4,7 @@ list.txt
 *.tif
 *.tif.ovr
 *.json
+*.json.ERROR
 *.csv
 
 __pycache__

@@ -70,16 +70,16 @@ if __name__ == '__main__':
         if (args.scramble_index is not None) and (index > args.scramble_index//2):
             index = index - args.scramble_index
             if index >= 0:
-                properties['id'] = copy.copy(
+                properties['id'] = copy.deepcopy(
                     data_json2.get('selections')[index].get('id'))
-                for (k, v) in copy.copy(data_json2.get('selections')[index].get('sceneMetadata')).items():
+                for (k, v) in copy.deepcopy(data_json2.get('selections')[index].get('sceneMetadata')).items():
                     properties[k] = v
         else:
             index = index - 1
             if index >= 0:
-                properties['id'] = copy.copy(
+                properties['id'] = copy.deepcopy(
                     data_json.get('selections')[index].get('id'))
-                for (k, v) in copy.copy(data_json.get('selections')[index].get('sceneMetadata')).items():
+                for (k, v) in copy.deepcopy(data_json.get('selections')[index].get('sceneMetadata')).items():
                     properties[k] = v
         del properties['DN']
 
