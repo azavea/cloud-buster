@@ -44,7 +44,6 @@ import requests
 import scipy.ndimage
 import torch
 import torchvision
-from s2cloudless import S2PixelCloudDetector
 
 
 def read_text(uri: str) -> str:
@@ -249,6 +248,8 @@ def gather(sentinel_path: str,
 
     # Get s2cloudless cloud mask.  This is always on L1C imagery.
     if not backstop and s2cloudless is not False and kind == 'L1C' and donor_mask is None:
+        from s2cloudless import S2PixelCloudDetector
+
         width_16 = width//16
         height_16 = height//16
 
