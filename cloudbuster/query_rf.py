@@ -161,7 +161,7 @@ class RFClient:
 def query_rf(features,
              refresh_token,
              limit=1024,
-             maxclouds=20,
+             maxclouds=20.0,
              mindate=['1307-10-13'],
              maxdate=['2038-01-19'],
              scale=None,
@@ -222,7 +222,7 @@ if __name__ == '__main__':
         parser.add_argument('--refresh-token', required=True, type=str)
         parser.add_argument('--response', required=False, type=str)
         parser.add_argument('--maxclouds', required=False,
-                            default=20, type=int)
+                            default=20, type=float)
         parser.add_argument('--mindate', required=False,
                             nargs='+', type=str, default=['1307-10-13'])
         parser.add_argument('--maxdate', required=False,
@@ -258,6 +258,7 @@ if __name__ == '__main__':
     if args.response is None and args.aoi_name is not None:
         args.response = './{}.json'.format(args.aoi_name)
 
+    print(len(sentinel_scenes.get('results')))
     if args.response is not None:
         with open(args.response, 'w') as f:
             json.dump(sentinel_scenes, f, sort_keys=True,
