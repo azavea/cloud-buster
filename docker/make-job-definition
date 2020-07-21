@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Expects RFTOKEN env var to be set containing RF refresh token
+
+IMAGE_NAME="cloud-buster"
+export ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
+export AWS_REGION="us-east-1"
+
+# aws ecr get-login --no-include-email --region ${AWS_REGION} | bash;
+# docker tag ${IMAGE_NAME} \
+#	${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${CLOUDBUSTER_ECR_IMAGE}
+# docker push \
+# 	${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${CLOUDBUSTER_ECR_IMAGE}
+
+cat ./docker/job-definition.template | envsubst

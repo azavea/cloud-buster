@@ -1,0 +1,6 @@
+FROM jamesmcclain/aws-batch-ml:9
+LABEL author="James McClain <jmcclain@azavea.com>"
+LABEL description="Download Sentinel-2 L1C Imagery"
+
+COPY . /opt/src
+RUN pip install /opt/src
