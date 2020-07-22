@@ -42,6 +42,7 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--merge', required=True, type=str)
     parser.add_argument('--name', required=True, type=str)
     parser.add_argument('--output-path', required=True, type=str)
+    parser.add_argument('--tmp', required=False, default='/tmp', type=str)
     return parser
 
 
@@ -58,7 +59,8 @@ if __name__ == '__main__':
         'command=./download_run.sh,{},'.format(args.merge),
         '--input-path,{},'.format(args.input_path),
         '--name,{},'.format(args.name),
-        '--output-path,{}'.format(args.output_path)
+        '--output-path,{}'.format(args.output_path),
+        '--tmp,{}'.format(args.tmp)
     ])
     if args.dryrun:
         print(submission)
