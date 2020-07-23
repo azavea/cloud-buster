@@ -85,15 +85,17 @@ usage: meta-gather.py [-h] [--architecture ARCHITECTURE]
 
 Uses AWS Batch jobs to process, in parallel, selected Sentinel-2 imagery to remove clouded areas.  Requires `cloudbuster/gather.py` to be uploaded to S3, and this location provided to the `meta-gather` process (`--gather`).  The Batch job will run in the defined queue (`--jobqueue`) using the specified job definition (`--jobdef`).  One may opt to see the batch job submission command without running it using `--dryrun`.
 
-The response from `filter.py` must be provided (`--response`), as well as a name to serve as the base of the filenames (`--name`) that will be saved to a specified S3 location (`--output-path`).  The process will either be based on `L1C` or `L2A` Sentinel-2 tiles (`--kind`), which can be restricted to a desired bounding box (`--bounds-clip`).  That imagery will be downloaded to a local cache, which can be set using the `--tmp` option.
+The response from `filter.py` must be provided (`--response`), as well as a name to serve as the base of the filenames (`--name`) that will be saved to a specified S3 location (`--output-path`).  The process will either be based on `L1C` or `L2A` Sentinel-2 tiles (`--kind`), which can be restricted to a desired bounding box (`--bounds-clip`).  That imagery will be downloaded to a local cache, which can be set using the `--tmp` option (defaults to `/tmp`).
 
 Cloud removal takes one of several paths paths:
 1. A pytorch model can be specified if `--architecture` and `--weights` are set, respectively, with the URI of an architecture and weight file.  (In order to use this method, the container referenced by the job definition must provide `pytorch`.)
 2. The `--s2cloudless` switch will use the [package](https://github.com/sentinel-hub/sentinel2-cloud-detector) of the same name for cloud detection.  (In order to use this method, the container referenced by the job definition must provide `s2cloudless`.)
-3. **TODO: donor mask**
+3. Masks are donated from another process.  See below.
 4. If no additional arguments are provided, the Sentinel-2-provided cloud mask will be used.
 
 The masked images will be saved to the S3 location given by `--output-path` with filenames of the form `{name}-{index}.tif` possibly with a prefix of `backstop-` or `mask-`.  The range of indices can be set to start from an index other than 1 (`--index-start`).
+
+On the topic of donating masks: It is possible that you may have a cloud removal model for Sentinel-2 L1C products, but wish to cloud mask L2A imagery.  In this case, one may wish to generate a donor mask from the former and apply it to the latter.  To donate a mask, set `--donate-mask True`.  This will upload a file with the prefix `mask-` to the output S3 location.  On a subsequent run, set `--donor-mask` to point to the S3 location of the mask `.tif` file, or to the S3 bucket/prefix containing the mask file.  In the latter case, one must also set the `--donor-mask-name` to the name of the file (useful if the filename does not end with `.tif`).
 
 Basic sample usage:
 ```
@@ -110,10 +112,10 @@ Basic sample usage:
 ```
 usage: meta-merge.py [-h] [--dryrun DRYRUN] --input-path INPUT_PATH --jobdef
                      JOBDEF --jobqueue JOBQUEUE --merge MERGE --name NAME
-                     --output-path OUTPUT_PATH
+                     --output-path OUTPUT_PATH [--tmp TMP]
 ```
 
-To join all the gathered imagery into a single mosaic, we may use an AWS Batch task to do the work.  This benefits from the fast transfer speeds from S3 to EC2 instances.  The job queue (`--jobqueue`) and job definition (`--jobdef`) must be given, as must the input S3 location (`--input-path`), output S3 location (`--output-path`), and scene name (`--name`).  The `merge.py` script must be uploaded to S3, and that location provided via the `--merge` argument.  Note that the input path must contain only images that pertain to the current mosaic, or the resulting image will be very large—in some cases so large that the job will fail.
+To join all the gathered imagery into a single mosaic, we may use an AWS Batch task to do the work.  This benefits from the fast transfer speeds from S3 to EC2 instances.  The job queue (`--jobqueue`) and job definition (`--jobdef`) must be given, as must the input S3 location (`--input-path`), output S3 location (`--output-path`), and scene name (`--name`).  The `merge.py` script must be uploaded to S3, and that location provided via the `--merge` argument.  Note that the input path must contain only images that pertain to the current mosaic, or the resulting image will be very large—in some cases so large that the job will fail.  Intermediate files are stored in the local directory specified by `--tmp` (defaults to `/tmp`).
 
 Upon completion, a file named `{NAME}-cloudless.tif` will exist in the output S3 bucket, as will a file named `{NAME}-cloudy.tif`.  The latter gives the combined backstop for the target region.
 
