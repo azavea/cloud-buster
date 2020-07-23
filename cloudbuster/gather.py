@@ -354,9 +354,9 @@ def gather(sentinel_path: str,
             donor_mask += donor_mask_filename
 
         code = os.system(
-            'aws s3 cp {} {}'.format(donor_mask, donor_mask_filename))
+            'aws s3 cp {} {}'.format(donor_mask, working(donor_mask_filename)))
         codes.append(code)
-        with rio.open(donor_mask_filename, 'r') as ds:
+        with rio.open(working(donor_mask_filename), 'r') as ds:
             cloud_mask = ds.read()[0]
         if delete:
             os.system('rm -f {}'.format(working(donor_mask_filename)))
