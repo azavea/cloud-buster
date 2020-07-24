@@ -83,7 +83,7 @@ usage: meta-gather.py [-h] [--architecture ARCHITECTURE]
                       [--donor-mask-name DONOR_MASK_NAME] [--tmp TMP]
 ```
 
-Uses AWS Batch jobs to process, in parallel, selected Sentinel-2 imagery to remove clouded areas.  Requires `cloudbuster/gather.py` to be available uploaded to S3, and this location provided to the `meta-gather` process (`--gather`).  The Batch job will run in the defined queue (`--jobqueue`) using the specified job definition (`--jobdef`).  One may opt to see the batch job submission command without running it using `--dryrun`.
+Uses AWS Batch jobs to process, in parallel, selected Sentinel-2 imagery to remove clouded areas.  Requires `cloudbuster/gather.py` to be available at an S3 or HTTP URI, and this location provided to the `meta-gather` process (`--gather`).  The Batch job will run in the defined queue (`--jobqueue`) using the specified job definition (`--jobdef`).  One may opt to see the batch job submission command without running it using `--dryrun`.
 
 The response from `filter.py` must be provided (`--response`), as well as a name to serve as the base of the filenames (`--name`) that will be saved to a specified S3 location (`--output-path`).  The process will either be based on `L1C` or `L2A` Sentinel-2 tiles (`--kind`), which can be restricted to a desired bounding box (`--bounds-clip`).  That imagery will be downloaded to a local cache, which can be set using the `--tmp` option (defaults to `/tmp`).
 
@@ -114,7 +114,7 @@ usage: meta-merge.py [-h] [--dryrun DRYRUN] --input-path INPUT_PATH --jobdef
                      --output-path OUTPUT_PATH [--tmp TMP]
 ```
 
-To join all the gathered imagery into a single mosaic, we may use an AWS Batch task to do the work.  This benefits from the fast transfer speeds from S3 to EC2 instances.  The job queue (`--jobqueue`) and job definition (`--jobdef`) must be given, as must the input S3 location (`--input-path`), output S3 location (`--output-path`), and scene name (`--name`).  The `merge.py` script must be uploaded to S3, and that location provided via the `--merge` argument.  Note that the input path must contain only images that pertain to the current mosaic, or the resulting image will be very large—in some cases so large that the job will fail.  Intermediate files are stored in the local directory specified by `--tmp` (defaults to `/tmp`).
+To join all the gathered imagery into a single mosaic, we may use an AWS Batch task to do the work.  This benefits from the fast transfer speeds from S3 to EC2 instances.  The job queue (`--jobqueue`) and job definition (`--jobdef`) must be given, as must the input S3 location (`--input-path`), output S3 location (`--output-path`), and scene name (`--name`).  The `cloudbuster/merge.py` script must at an S3 or HTTP URI, and that location provided via the `--merge` argument.  Note that the input path must contain only images that pertain to the current mosaic, or the resulting image will be very large—in some cases so large that the job will fail.  Intermediate files are stored in the local directory specified by `--tmp` (defaults to `/tmp`).
 
 Upon completion, a file named `{NAME}-cloudless.tif` will exist in the output S3 bucket, as will a file named `{NAME}-cloudy.tif`.  The latter gives the combined backstop for the target region.
 
