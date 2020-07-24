@@ -2,9 +2,9 @@
 
 ![Cloud Buster](https://user-images.githubusercontent.com/11281373/72922457-f7a3d080-3d44-11ea-9032-fc80166a5389.jpg)
 
-Cloud-Buster is a Python library and command-line utility suite for generating cloud-free mosaics from Sentinel-2 imagery.  This package makes use of [RasterFoundry](https://rasterfoundry.azavea.com/) and [GDAL](https://gdal.org) to gather the imagery and assemble the mosaics.  Cloud detection is provided through one of the following mechanisms:
+Cloud-Buster is a Python library and command-line utility suite for generating cloud-free mosaics from Sentinel-2 imagery.  This package makes use of [RasterFoundry](https://rasterfoundry.azavea.com/) and [GDAL](https://gdal.org) to gather the imagery and assemble the mosaics.  Cloud detection is provided through any or all of the following mechanisms:
 1. Built-in Sentinel-2 cloud masks.  Results from this method are poor; not recommended.
-2. The [`s2cloudless`](https://github.com/sentinel-hub/sentinel2-cloud-detector) Python package.
+2. The [`s2cloudless`](https://github.com/sentinel-hub/sentinel2-cloud-detector) Python package.  Note: only for L1C imagery.
 3. [PyTorch](https://pytorch.org/) models.  Best results, requires availability of cloud detection architecture and weights files.
 
 ## Installation
@@ -55,9 +55,9 @@ usage: filter.py [-h] [--backstop BACKSTOP] [--coverage-count COVERAGE_COUNT]
                  [--max-uncovered MAX_UNCOVERED]
 ```
 
-Attempts to cover the queried geometry using a selection of imagery from a `query_rf` call.  The algorithm will attempt to cover the target area multiple times (`--coverage-count`) to help ensure the final mosaic will be cloud free after masking and merging.  Some small area of the target geometry may be left uncovered (`--max-uncovered`), which may be needed to guarantee the desired coverage.  The number of total images selected may be bounded (`--max-selections`) if, for instance, processing time and/or computational resources are limited.
+Attempts to cover the queried geometry using a selection of imagery from a `query_rf` call.  The algorithm will attempt to cover the target area multiple times (`--coverage-count`) to help ensure the final mosaic will be cloud free after masking and merging.  Some small area of the target geometry may be left uncovered (`--max-uncovered`), which may be needed to guarantee the desired coverage.  The number of total images selected may be bounded (`--max-selections`) if, for instance, processing time and/or computational resources are limited; this option will also help limit the amount of imagery that is downloaded.
 
-Unless `--backstop False` is set, a fallback image will be selected to ensure that no holes will be left in the final mosaic, subject to the `--max-selections` constraint.  Any selections that serve as a backstop will have a `backstop` field in the output JSON file set to `True`.
+Unless `--backstop False` is set, a fallback image will be selected to ensure that no holes will be left in the final mosaic.  Any selections that serve as a backstop will have a `backstop` field in the output JSON file set to `True`.
 
 Results of the `query_rf` operation may be prefiltered according to a set of criteria:
 1. input imagery may be restricted to have a minimum cloud coverage percentage (`--minclouds`),
@@ -83,19 +83,18 @@ usage: meta-gather.py [-h] [--architecture ARCHITECTURE]
                       [--donor-mask-name DONOR_MASK_NAME] [--tmp TMP]
 ```
 
-Uses AWS Batch jobs to process, in parallel, selected Sentinel-2 imagery to remove clouded areas.  Requires `cloudbuster/gather.py` to be uploaded to S3, and this location provided to the `meta-gather` process (`--gather`).  The Batch job will run in the defined queue (`--jobqueue`) using the specified job definition (`--jobdef`).  One may opt to see the batch job submission command without running it using `--dryrun`.
+Uses AWS Batch jobs to process, in parallel, selected Sentinel-2 imagery to remove clouded areas.  Requires `cloudbuster/gather.py` to be available uploaded to S3, and this location provided to the `meta-gather` process (`--gather`).  The Batch job will run in the defined queue (`--jobqueue`) using the specified job definition (`--jobdef`).  One may opt to see the batch job submission command without running it using `--dryrun`.
 
 The response from `filter.py` must be provided (`--response`), as well as a name to serve as the base of the filenames (`--name`) that will be saved to a specified S3 location (`--output-path`).  The process will either be based on `L1C` or `L2A` Sentinel-2 tiles (`--kind`), which can be restricted to a desired bounding box (`--bounds-clip`).  That imagery will be downloaded to a local cache, which can be set using the `--tmp` option (defaults to `/tmp`).
 
-Cloud removal takes one of several paths paths:
+Cloud removal takes one or more paths:
 1. A pytorch model can be specified if `--architecture` and `--weights` are set, respectively, with the URI of an architecture and weight file.  (In order to use this method, the container referenced by the job definition must provide `pytorch`.)
 2. The `--s2cloudless` switch will use the [package](https://github.com/sentinel-hub/sentinel2-cloud-detector) of the same name for cloud detection.  (In order to use this method, the container referenced by the job definition must provide `s2cloudless`.)
-3. Masks are donated from another process.  See below.
-4. If no additional arguments are provided, the Sentinel-2-provided cloud mask will be used.
+3. If no additional arguments are provided, the Sentinel-2-provided cloud mask will be used.
 
 The masked images will be saved to the S3 location given by `--output-path` with filenames of the form `{name}-{index}.tif` possibly with a prefix of `backstop-` or `mask-`.  The range of indices can be set to start from an index other than 1 (`--index-start`).
 
-On the topic of donating masks: It is possible that you may have a cloud removal model for Sentinel-2 L1C products, but wish to cloud mask L2A imagery.  In this case, one may wish to generate a donor mask from the former and apply it to the latter.  To donate a mask, set `--donate-mask True`.  This will upload a file with the prefix `mask-` to the output S3 location.  On a subsequent run, set `--donor-mask` to point to the S3 location of the mask `.tif` file, or to the S3 bucket/prefix containing the mask file.  In the latter case, one must also set the `--donor-mask-name` to the name of the file (useful if the filename does not end with `.tif`).
+On the topic of donating masks: It is possible that you may have a cloud removal model for Sentinel-2 L1C products, but wish to cloud mask L2A imagery.  In this case, one may wish to generate a donor mask from the former and apply it to the latter.  To donate a mask, set `--donate-mask True`.  This will upload a file with the prefix `mask-` to the output S3 location.  On a subsequent run, set `--donor-mask` to point to the S3 location of the mask `.tif` file, or to the S3 bucket/prefix containing the mask file.  In the latter case, one must also set the `--donor-mask-name` to the name of the file (useful if the filename does not end with `.tif`).  Usage of a donor mask overrides other cloud masking methods.
 
 Basic sample usage:
 ```
