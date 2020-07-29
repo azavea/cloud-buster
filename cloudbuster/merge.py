@@ -153,8 +153,9 @@ if __name__ == '__main__':
         parser.add_argument('--input-path', required=True, type=str)
         parser.add_argument('--name', required=True, type=str)
         parser.add_argument('--output-path', required=True, type=str)
+        parser.add_argument('--tmp', required=False, type=str, default='/tmp')
         return parser
 
     args = cli_parser().parse_args()
 
-    merge(args.name, args.input_path, args.output_path)
+    merge(args.name, args.input_path, args.output_path, local_working_dir=args.tmp)
