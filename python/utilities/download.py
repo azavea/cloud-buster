@@ -50,6 +50,7 @@ def cli_parser() -> argparse.ArgumentParser:
                         choices=['L2A', 'L1C'], nargs='+', default=['L1C'])
     parser.add_argument('--max-uncovered', required=False,
                         type=float, default=1e-8)
+    parser.add_argument('--date-regexp', required=False, type=str)
     return parser
 
 
@@ -80,7 +81,7 @@ if __name__ == '__main__':
         '--output /tmp/filtered.json ',
         '--max-uncovered {} '.format(args.max_uncovered),
         '--minclouds {} '.format(args.minclouds),
-        '> /dev/null'
+        '--date-regexp \'{}\' '.format(args.date_regexp) if args.date_regexp else '',
     ])
 
     if os.WEXITSTATUS(os.system(command)) != 0:
