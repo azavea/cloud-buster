@@ -31,6 +31,7 @@ import ast
 import copy
 import json
 import os
+import os.path
 
 import rasterio as rio
 import numpy as np
@@ -41,13 +42,13 @@ def cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--geojson', required=True, type=str)
     parser.add_argument('--mindate', required=True, type=str)
     parser.add_argument('--maxdate', required=True, type=str)
-    parser.add_argument('--maxclouds', required=True, type=int)
-    parser.add_argument('--minclouds', required=False, default=0.0, type=int)
+    parser.add_argument('--maxclouds', required=True, type=float)
+    parser.add_argument('--minclouds', required=False, default=0, type=float)
     parser.add_argument('--images', required=True, type=int)
     parser.add_argument('--output-dir', required=True, type=str)
-    parser.add_argument('--refresh-token', required=True, type=str)
+    parser.add_argument('--refresh-token', required=False, type=str)
     parser.add_argument('--kind', required=False,
-                        choices=['L2A', 'L1C'], nargs='+', default=['L1C'])
+                        choices=['L2A', 'L1C'], nargs='+', default=['L1C', 'L2A'])
     parser.add_argument('--max-uncovered', required=False,
                         type=float, default=1e-8)
     parser.add_argument('--date-regexp', required=False, type=str)
@@ -61,16 +62,16 @@ if __name__ == '__main__':
         'python3 /workspace/query_rf.py ',
         '--geojson {} '.format(args.geojson),
         '--limit {} '.format(max(64, args.images)),
-        '--refresh-token {} '.format(args.refresh_token),
         '--response /tmp/raw.json ',
+        '--minclouds {} '.format(args.minclouds),
         '--maxclouds {} '.format(args.maxclouds),
         '--mindate {} '.format(args.mindate),
         '--maxdate {} '.format(args.maxdate),
         '> /dev/null'
     ])
 
-    if os.WEXITSTATUS(os.system(command)) != 0:
-        raise Exception()
+    if os.WEXITSTATUS(os.system(command)) != 0 or not os.path.exists('/tmp/raw.json'):
+        raise Exception('Query command failed')
 
     command = ''.join([
         'python3 /workspace/filter.py ',
@@ -86,12 +87,15 @@ if __name__ == '__main__':
 
     if os.WEXITSTATUS(os.system(command)) != 0:
         raise Exception('Filter command failed')
+    if not os.path.exists('/tmp/filtered.json'):
+        raise Exception('Polygon not covered.  Try increasing --max-uncovered')
 
     try:
         with open('/tmp/filtered.json', 'r') as f:
             data = json.load(f)
     except:
         raise Exception('Polygon not covered.  Try increasing --max-uncovered')
+
     data['selections'] = data['selections'][0:args.images]
 
     os.system('mkdir -p {}'.format(args.output_dir))

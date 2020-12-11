@@ -98,7 +98,7 @@ On the topic of donating masks: It is possible that you may have a cloud removal
 
 Basic sample usage:
 ```
-/meta-gather.py --gather s3://path/to/gather.py \
+meta-gather.py --gather s3://path/to/gather.py \
                 --jobqueue my-queue \
                 --jobdef my-jobdef:33 \
                 --name good-name \
