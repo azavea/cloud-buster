@@ -27,9 +27,9 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 import json
-from uuid import uuid4
+import copy
 
-import requests
+from satsearch import Search
 
 import shapely.affinity  # type: ignore
 import shapely.geometry  # type: ignore
@@ -38,12 +38,15 @@ import shapely.ops  # type: ignore
 
 def query_rf(features,
              refresh_token,
-             limit=1024,
+             limit=800,
+             minclouds=0.0,
              maxclouds=20.0,
              mindate=['1307-10-13'],
              maxdate=['2038-01-19'],
              scale=None,
              original_shape=False):
+
+    limit = min(limit, 800)
 
     def convert_and_scale(f):
         tmp = shapely.geometry.shape(f.get('geometry'))
@@ -67,22 +70,49 @@ def query_rf(features,
         'aoi': shapely.geometry.mapping(aoi_shape)
     }
 
-    rf_client = RFClient(refresh_token,
-                         'https://app.rasterfoundry.com/api')
-    rf_shape = rf_client.create_shape(
-        shapely.geometry.mapping(shape), str(uuid4()))
-    for (mindate, maxdate) in zip(mindate, maxdate):
+    rf_shape = shapely.geometry.mapping(shape)
+    for (mindate1, maxdate1) in zip(mindate, maxdate):
         geo_filter = {
-            "minAcquisitionDate": mindate,
-            "maxAcquisitionDate": maxdate,
-            "maxCloudCover": maxclouds,
-            "overlapPercentage": 50.0,
-            "limit": limit
+            "url": "https://earth-search.aws.element84.com/v0",
+            "intersects": copy.copy(rf_shape),
+            "query": {
+                "eo:cloud_cover": {
+                    "lte": maxclouds,
+                    "gte": minclouds,
+                }
+            },
+            "datetime": f"{mindate1}/{maxdate1}",
+            "sort": [
+                {
+                    "field": "datetime",
+                    "direction": ">",
+                },
+                # {
+                #     "field": "eo:cloud_cover",
+                #     "direction": "<",
+                # },
+            ],
+            "collections": ["sentinel-s2-l2a"],
+            "limit": limit,
         }
-        rf_params = RFClient.rf_params_from_geo_filter(
-            geo_filter, rf_shape.get('id'))
-        sentinel_scenes['results'] += rf_client.list_scenes(
-            rf_params).get('results')
+        search = Search(**geo_filter)
+        for item in list(search.items(limit=limit))[0:limit]:
+            tiles = item.assets.get("B01").get("href")
+            tiles = tiles[tiles.find("/tiles") + 1:]  # get "/tiles/..."
+            tiles = tiles[:-8]  # remove "/B01.jp2" from the end
+            if tiles.endswith("/R60m"):
+                tiles = tiles[:-5]
+            result = {
+                "dataFootprint": item.geometry,
+                "createdAt": item.properties.get("datetime"),
+                "name": item.properties.get("sentinel:product_id"),
+                "sceneMetadata": {
+                    "cloudyPixelPercentage":
+                    item.properties.get("eo:cloud_cover"),
+                    "path": tiles,
+                },
+            }
+            sentinel_scenes['results'].append(result)
 
     return sentinel_scenes
 
@@ -99,15 +129,29 @@ if __name__ == '__main__':
         parser.add_argument('--name-property', required=False, type=str)
         parser.add_argument('--refresh-token', required=False, type=str)
         parser.add_argument('--response', required=False, type=str)
-        parser.add_argument('--maxclouds', required=False,
-                            default=20, type=float)
-        parser.add_argument('--mindate', required=False,
-                            nargs='+', type=str, default=['1307-10-13'])
-        parser.add_argument('--maxdate', required=False,
-                            nargs='+', type=str, default=['2038-01-19'])
+        parser.add_argument('--minclouds',
+                            required=False,
+                            default=0.0,
+                            type=float)
+        parser.add_argument('--maxclouds',
+                            required=False,
+                            default=20.0,
+                            type=float)
+        parser.add_argument('--mindate',
+                            required=False,
+                            nargs='+',
+                            type=str,
+                            default=['1307-10-13'])
+        parser.add_argument('--maxdate',
+                            required=False,
+                            nargs='+',
+                            type=str,
+                            default=['2038-01-19'])
         parser.add_argument('--scale', type=float, required=False)
         parser.add_argument('--original-shape',
-                            type=ast.literal_eval, required=False, default=False)
+                            type=ast.literal_eval,
+                            required=False,
+                            default=False)
         return parser
 
     args = cli_parser().parse_args()
@@ -115,16 +159,15 @@ if __name__ == '__main__':
     with open(args.geojson, 'r') as f:
         features = json.load(f)
 
-    sentinel_scenes = query_rf(
-        features,
-        args.refresh_token,
-        args.limit,
-        args.maxclouds,
-        args.mindate,
-        args.maxdate,
-        args.scale,
-        args.original_shape
-    )
+    sentinel_scenes = query_rf(features=features,
+                               refresh_token=args.refresh_token,
+                               limit=args.limit,
+                               minclouds=args.minclouds,
+                               maxclouds=args.maxclouds,
+                               mindate=args.mindate,
+                               maxdate=args.maxdate,
+                               scale=args.scale,
+                               original_shape=args.original_shape)
 
     if args.aoi_name is None and args.name_property is not None:
         if 'properties' in features:
@@ -139,6 +182,9 @@ if __name__ == '__main__':
     print(len(sentinel_scenes.get('results')))
     if args.response is not None:
         with open(args.response, 'w') as f:
-            json.dump(sentinel_scenes, f, sort_keys=True,
-                      indent=4, separators=(',', ': '))
+            json.dump(sentinel_scenes,
+                      f,
+                      sort_keys=True,
+                      indent=4,
+                      separators=(',', ': '))
         print(args.response)
