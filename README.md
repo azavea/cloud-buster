@@ -2,7 +2,7 @@
 
 ![Cloud Buster](https://user-images.githubusercontent.com/11281373/72922457-f7a3d080-3d44-11ea-9032-fc80166a5389.jpg)
 
-Cloud-Buster is a Python library and command-line utility suite for generating cloud-free mosaics from Sentinel-2 imagery.  This package makes use of [RasterFoundry](https://rasterfoundry.azavea.com/) and [GDAL](https://gdal.org) to gather the imagery and assemble the mosaics.  Cloud detection is provided through any or all of the following mechanisms:
+Cloud-Buster is a Python library and command-line utility suite for generating cloud-free mosaics from Sentinel-2 imagery.  This package makes use of the [Element84 API](https://www.element84.com/earth-search/) and [GDAL](https://gdal.org) to gather the imagery and assemble the mosaics.  Cloud detection is provided through any or all of the following mechanisms:
 1. Built-in Sentinel-2 cloud masks.  Results from this method are poor; not recommended.
 2. The [`s2cloudless`](https://github.com/sentinel-hub/sentinel2-cloud-detector) Python package.  Note: only for L1C imagery.
 3. [PyTorch](https://pytorch.org/) models.  Best results, requires availability of cloud detection architecture and weights files.
