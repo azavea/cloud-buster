@@ -55,8 +55,7 @@ def cli_parser() -> argparse.ArgumentParser:
                         default=None, type=str)
     parser.add_argument('--donor-mask-name', required=False,
                         default=None, type=str)
-    parser.add_argument('--s2cloudless', required=False,
-                        default=False, type=ast.literal_eval)
+    parser.set_defaults(s2cloudless=False)
     parser.add_argument('--tmp', required=False, type=str, default='/tmp')
     return parser
 
@@ -93,7 +92,6 @@ if __name__ == '__main__':
             '--donor-mask-name,{},'.format(args.donor_mask_name),
             '--donate-mask,{},'.format(args.donate_mask),
             '--tmp,{},'.format(args.tmp),
-            '--s2cloudless,{},'.format(args.s2cloudless),
             '--backstop,{}'.format(result.get('backstop', False)),
         ])
         if args.dryrun:
