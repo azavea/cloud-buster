@@ -85,6 +85,8 @@ def gather(sentinel_path: str,
            donor_mask_name: Optional[str] = None):
     codes = []
 
+    s2cloudless = False
+
     assert output_s3_uri.endswith('/')
     assert not working_dir.endswith('/')
     assert (len(bounds) == 4 if bounds is not None else True)
@@ -246,51 +248,6 @@ def gather(sentinel_path: str,
         if delete:
             os.system('rm -f {}'.format(working('CLD_20m.jp2')))
 
-    # Get s2cloudless cloud mask.  This is always on L1C imagery.
-    if not backstop and s2cloudless is not False and kind == 'L1C' and donor_mask is None:
-        from s2cloudless import S2PixelCloudDetector
-
-        width_16 = width//16
-        height_16 = height//16
-
-        small_data = np.zeros((13, width_16, height_16), dtype=np.uint16)
-        rasterio.warp.reproject(
-            data[0:13], small_data,
-            src_transform=geoTransform,
-            src_crs=crs,
-            dst_transform=geoTransform *
-            rasterio.transform.Affine.scale(16, 16),
-            dst_crs=crs,
-            resampling=rasterio.enums.Resampling.nearest)
-        small_data = np.transpose(small_data, axes=(1, 2, 0))
-        small_data = small_data.reshape(1, width_16, height_16, 13) / 1e5
-        cloud_detector = S2PixelCloudDetector(
-            threshold=0.4, average_over=4, dilation_size=1, all_bands=True)
-        small_tmp = cloud_detector.get_cloud_probability_maps(small_data)
-        try:
-            quantile = np.quantile(
-                np.extract(small_tmp > np.min(small_tmp), small_tmp), 0.20)
-        except:
-            quantile = 0.0033
-        cutoff = max(0.0033, quantile)
-        small_tmp = (small_tmp > cutoff).astype(np.uint16)
-
-        tmp = np.zeros((1, width, height), dtype=np.uint16)
-        rasterio.warp.reproject(
-            small_tmp, tmp,
-            src_transform=geoTransform *
-            rasterio.transform.Affine.scale(16, 16),
-            src_crs=crs,
-            dst_transform=geoTransform,
-            dst_crs=crs,
-            resampling=rasterio.enums.Resampling.nearest)
-
-        cloud_mask = cloud_mask + tmp
-
-        del tmp
-        del small_tmp
-        del small_data
-
     # Get model cloud mask
     if not backstop and architecture is not None and weights is not None and donor_mask is None:
         model_window_size = 512
@@ -417,8 +374,7 @@ if __name__ == '__main__':
         parser.add_argument('--sentinel-path', required=True, type=str)
         parser.add_argument('--architecture', required=False, type=str)
         parser.add_argument('--weights', required=False, type=str)
-        parser.add_argument('--s2cloudless', required=False,
-                            default=False, type=ast.literal_eval)
+        parser.set_defaults(s2cloudless=False)
         parser.add_argument('--kind', required=False,
                             choices=['L2A', 'L1C'], default='L1C')
         parser.add_argument('--donate-mask', required=False,

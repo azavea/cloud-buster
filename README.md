@@ -1,11 +1,8 @@
 # cloud-buster
 
-![Cloud Buster](https://user-images.githubusercontent.com/11281373/72922457-f7a3d080-3d44-11ea-9032-fc80166a5389.jpg)
-
 Cloud-Buster is a Python library and command-line utility suite for generating cloud-free mosaics from Sentinel-2 imagery.  This package makes use of the [Element84 API](https://www.element84.com/earth-search/) and [GDAL](https://gdal.org) to gather the imagery and assemble the mosaics.  Cloud detection is provided through any or all of the following mechanisms:
 1. Built-in Sentinel-2 cloud masks.  Results from this method are poor; not recommended.
-2. The [`s2cloudless`](https://github.com/sentinel-hub/sentinel2-cloud-detector) Python package.  Note: only for L1C imagery.
-3. [PyTorch](https://pytorch.org/) models.  Best results, requires availability of cloud detection architecture and weights files.
+2. [PyTorch](https://pytorch.org/) models.  Best results, requires availability of cloud detection architecture and weights files.
 
 ## Installation
 
@@ -89,8 +86,7 @@ The response from `filter.py` must be provided (`--response`), as well as a name
 
 Cloud removal takes one or more paths:
 1. A pytorch model can be specified if `--architecture` and `--weights` are set, respectively, with the URI of an architecture and weight file.  (In order to use this method, the container referenced by the job definition must provide `pytorch`.)
-2. The `--s2cloudless` switch will use the [package](https://github.com/sentinel-hub/sentinel2-cloud-detector) of the same name for cloud detection.  (In order to use this method, the container referenced by the job definition must provide `s2cloudless`.)
-3. If no additional arguments are provided, the Sentinel-2-provided cloud mask will be used.
+2. If no additional arguments are provided, the Sentinel-2-provided cloud mask will be used.
 
 The masked images will be saved to the S3 location given by `--output-path` with filenames of the form `{name}-{index}.tif` possibly with a prefix of `backstop-` or `mask-`.  The range of indices can be set to start from an index other than 1 (`--index-start`).
 
