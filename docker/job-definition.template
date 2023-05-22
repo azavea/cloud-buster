@@ -1,0 +1,53 @@
+{
+    "jobDefinitionName": "cloud-buster",
+    "type": "container",
+    "parameters": {},
+    "containerProperties": {
+        "image": "jamesmcclain/aws-batch-ml:9",
+        "vcpus": 2,
+        "memory": 8000,
+        "command": [],
+        "environment": [
+            {
+                "name": "RFTOKEN",
+                "value": "${RFTOKEN}"
+            },
+            {
+                "name": "LC_ALL",
+                "value": "C.UTF-8"
+            },
+            {
+                "name": "LANG",
+                "value": "C.UTF-8"
+            }
+        ],
+        "volumes": [
+            {
+                "host": {
+                    "sourcePath": "/home/ec2-user"
+                },
+                "name": "home"
+            },
+            {
+                "host": {
+                    "sourcePath": "/dev/shm"
+                },
+                "name": "shm"
+            }
+        ],
+        "mountPoints": [
+            {
+                "containerPath": "/opt/data",
+                "readOnly": false,
+                "sourceVolume": "home"
+            },
+            {
+                "containerPath": "/dev/shm",
+                "readOnly": false,
+                "sourceVolume": "shm"
+            }
+        ],
+        "ulimits": [],
+        "resourceRequirements": []
+    }
+}
